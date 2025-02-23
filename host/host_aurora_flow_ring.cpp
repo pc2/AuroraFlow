@@ -177,26 +177,44 @@ int main(int argc, char *argv[])
             std::cout << "Repetition " << r << " with " << config.message_sizes[r] << " bytes" << std::endl;
         }
         try {
-            recv_send[0].prepare_repetition(r)
+            recv_send[0].prepare_repetition(r);
             recv_send[0].start();
             if (rank == 0) {
                 send_recv.prepare_repetition(r);
+                recv_send[0].prepare_repetition(r);
+                recv_send[0].start();
             } else {
+                recv_send[0].prepare_repetition(r);
+                recv_send[0].start();
                 recv_send[1].prepare_repetition(r);
                 recv_send[1].start();
             }
 
             MPI_Barrier(MPI_COMM_WORLD);
             double start_time = get_wtime();
+            double end_time;
             if (rank == 0) {
                 send_recv.start();
 
                 if (send_recv.timeout()) {
                     std::cout << "SendRecv timeout" << std::endl;
                 }
+                if (recv_send[0].timeout()) {
+                    std::cout << "RecvSend 0 timeout" << std::endl;
+                }
 
-                double end_time = get_wtime();
+                end_time = get_wtime();
+            } else {
+                if (recv_send[0].timeout()) {
+                    std::cout << "RecvSend 0 timeout" << std::endl;
+                }
+                if (recv_send[1].timeout()) {
+                    std::cout << "RecvSend 1 timeout" << std::endl;
+                }
+            }
+            MPI_Barrier(MPI_COMM_WORLD);
 
+            if (rank == 0) {
                 send_recv.write_back();
 
                 uint32_t errors = 0;
@@ -213,7 +231,6 @@ int main(int argc, char *argv[])
                 std::cout << "Throughput: " << gigabits / latency << std::endl;
 
                 write_results(config.semaphore, size, config.iterations_per_message[r], config.message_sizes[r], latency);
-
             }
         } catch (const std::runtime_error &e) {
             std::cout << "caught runtime error: " << e.what() << std::endl;
