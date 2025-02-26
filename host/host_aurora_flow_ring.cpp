@@ -133,9 +133,9 @@ int main(int argc, char *argv[])
     device = xrt::device(device_bdf);
 
     if (rank == 0) {
-        xclbin_uuid = device.load_xclbin("aurora_flow_test_hw.xclbin");
+        xclbin_uuid = device.load_xclbin("aurora_flow_test_framing_hw.xclbin");
     } else {
-        xclbin_uuid = device.load_xclbin("aurora_flow_ring_hw.xclbin");
+        xclbin_uuid = device.load_xclbin("aurora_flow_ring_framing_hw.xclbin");
     }
 
     std::vector<Aurora> aurora(2);
@@ -162,7 +162,7 @@ int main(int argc, char *argv[])
     // create kernel objects
     std::vector<SendKernel> send_kernels(2);
     std::vector<RecvKernel> recv_kernels(2);
-    std::vector<SendRecvKernel> send_recv_kernels(2);
+    std::vector<RecvSendKernel> send_recv_kernels(2);
 
     if (rank == 0) {
         for (uint32_t i = 0; i < 2; i++) {
@@ -171,7 +171,7 @@ int main(int argc, char *argv[])
         }
     } else {
         for (uint32_t i = 0; i < 2; i++) {
-            send_recv_kernels[i] = SendRecvKernel(i, device, xclbin_uuid, config);
+            send_recv_kernels[i] = RecvSendKernel(i, device, xclbin_uuid, config);
         }
     }
 
@@ -184,7 +184,7 @@ int main(int argc, char *argv[])
             uint32_t i_recv = 0;
             SendKernel &send = send_kernels[i_send];
             RecvKernel &recv = recv_kernels[i_recv];
-            SendRecvKernel &send_recv = send_recv_kernels[i_recv];
+            RecvSendKernel &send_recv = send_recv_kernels[i_recv];
             if (rank == 0) {
                 send.prepare_repetition(r);
                 recv.prepare_repetition(r);
