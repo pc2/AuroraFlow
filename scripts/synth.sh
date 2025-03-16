@@ -8,4 +8,4 @@
 
 source env.sh
 
-make aurora_flow_ring_hw.xclbin -j6 $@
+make -j6 $@

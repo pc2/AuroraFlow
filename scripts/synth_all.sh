@@ -13,6 +13,6 @@ for mode in 0 1; do
         cp -r ${base_path} ${path}
 
         cd ${path}
-        sbatch ./scripts/synth.sh USE_FRAMING=${mode} FIFO_WIDTH=${width}
+        sbatch ./scripts/synth.sh xclbin USE_FRAMING=${mode} FIFO_WIDTH=${width}
     done
 done
