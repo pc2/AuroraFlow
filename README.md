@@ -1,5 +1,9 @@
 ﻿# Using AuroraFlow for direct point-to-point communications
 
+A detailed analysis of this work including an application demonstration was published at HEART'25.
+
+Gerrit Pape, Bjarne Wintermann, Linus Jungemann, Michael Lass, Marius Meyer, Heinrich Riebler, and Christian Plessl. 2025. AuroraFlow, an Easy-to-Use, Low-Latency FPGA Communication Solution Demonstrated on Multi-FPGA Neural Network Inference. In Proceedings of the 15th International Symposium on Highly Efficient Accelerators and Reconfigurable Technologies (HEART '25). Association for Computing Machinery, New York, NY, USA, 35–48. https://doi.org/10.1145/3728179.3728190
+
 ## Introduction
 
 This repository is based on the [example](https://github.com/Xilinx/Vitis-Tutorials/tree/2023.2/Hardware_Acceleration/Design_Tutorials/08-alveo_aurora_kernel) from Xilinx and provides you a ready-to-link, packaged Aurora IP which works on four QSFP28 lanes, has Flow Control implemented and reaches 100Gb/s throughput.
