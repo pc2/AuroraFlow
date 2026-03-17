@@ -281,8 +281,9 @@ The second is the so-called latency test, which tests different message sizes wi
 
 ### Noctua2
 
-
 There are scripts available for running on the [Noctua 2](https://pc2.uni-paderborn.de/hpc-services/available-systems/noctua2) cluster. The used set of modules can be loaded with the following command.
+
+If you want to just execute it, you can follow the [AuroraFlow Quick Start Guide](https://upb-pc2.atlassian.net/wiki/spaces/PC2DOK/pages/356876352/AuroraFlow+Quick+Start+Guide)
 
 ```
   source env.sh
@@ -302,4 +303,4 @@ There is also a helper script which runs a given script for every available FPGA
 ./scripts/for_every_node.sh ./scripts/run_over_all_configs.sh
 ```
 
-<p align="center"><sup>Copyright&copy; 2023-2025 Gerrit Pape (papeg@mail.upb.de)</sup></p>
+<p align="center"><sup>Copyright&copy; 2023-2026 Gerrit Pape (gerrit.pape@uni-paderborn.de)</sup></p>
