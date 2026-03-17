@@ -2,7 +2,7 @@
 #SBATCH -p fpga
 #SBATCH -t 04:00:00
 #SBATCH -N 1
-#SBATCH --constraint=xilinx_u280_xrt2.14
+#SBATCH --constraint=xilinx_u280_xrt2.16
 #SBATCH --tasks-per-node 6
 #SBATCH --mail-type=ALL
 

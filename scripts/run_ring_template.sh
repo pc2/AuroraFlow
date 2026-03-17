@@ -7,7 +7,7 @@
 #SBATCH -o aurora_flow_ring_n{0}_%j.out
 #SBATCH -p fpga
 #SBATCH -A hpc-lco-kenter
-#SBATCH --constraint xilinx_u280_xrt2.14
+#SBATCH --constraint xilinx_u280_xrt2.16
 
 ## Load environment modules
 source env.sh

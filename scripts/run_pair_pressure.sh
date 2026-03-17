@@ -2,7 +2,7 @@
 #SBATCH -p fpga
 #SBATCH -t 28:00:00
 #SBATCH -N 1
-#SBATCH --constraint=xilinx_u280_xrt2.14
+#SBATCH --constraint=xilinx_u280_xrt2.16
 #SBATCH --mail-type=ALL
 
 if ! command -v v++ &> /dev/null
