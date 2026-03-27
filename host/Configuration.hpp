@@ -106,12 +106,7 @@ public:
         }
 
         if (emulation) {
-            if (test_mode == 0) {
-                xclbin_path = "aurora_flow_test_sw_emu_loopback.xclbin";
-            } else {
-                std::cout << "Error: unsupported test mode for emulation" << std::endl;
-                exit(EXIT_FAILURE);
-            }
+            xclbin_path = "aurora_flow_test_sw_emu.xclbin";
         }
         
         instances.resize(num_instances);

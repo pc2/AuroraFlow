@@ -171,12 +171,13 @@ aurora_flow_test_hw.xclbin: aurora send_$(TARGET).xo recv_$(TARGET).xo aurora_fl
 aurora_flow_ring_hw.xclbin: aurora send_recv_$(TARGET).xo aurora_flow_ring_$(TARGET).cfg
 	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_ring_$(TARGET) --config aurora_flow_ring_$(TARGET).cfg --output $@ aurora_flow_0.xo aurora_flow_1.xo send_recv_$(TARGET).xo
 
-aurora_flow_test_sw_emu_loopback.xclbin: send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_$(TARGET)_loopback.cfg
-	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_$(TARGET) --config aurora_flow_test_$(TARGET)_loopback.cfg --output $@ recv_$(TARGET).xo send_$(TARGET).xo
+aurora_file_link_$(TARGET).xo: ./hls/aurora_file_link.cpp
+	v++ $(HLSCFLAGS) --temp_dir _x_aurora_file_link --kernel aurora_file_link --output $@ $^
 
-xclbin : aurora_flow_test_$(TARGET).xclbin
+aurora_flow_test_sw_emu.xclbin: aurora_file_link_$(TARGET).xo send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_$(TARGET).cfg
+	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_$(TARGET) --config aurora_flow_test_$(TARGET).cfg --output $@ aurora_file_link_$(TARGET).xo recv_$(TARGET).xo send_$(TARGET).xo
 
-xclbin_emu: aurora_flow_test_$(TARGET)_loopback.xclbin
+xclbin: aurora_flow_test_$(TARGET).xclbin
 
 # host build for example
 CXXFLAGS += -std=c++17 -Wall -g

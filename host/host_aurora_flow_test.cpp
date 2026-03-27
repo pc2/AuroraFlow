@@ -115,27 +115,27 @@ int main(int argc, char *argv[])
     }
     std::vector<Aurora> auroras(config.num_instances);
 
+    std::vector<bool> statuses(config.num_instances);
+    for (uint32_t i = 0; i < config.num_instances; i++) {
+        auroras[i] = Aurora(i % 2, devices[i / 2], xclbin_uuids[i / 2]);
+        statuses[i] = auroras[i].core_status_ok(3000);
+        if (!statuses[i]) {
+            std::cout << "problem with core " << i % 2
+                << " on device " << device_bdfs[i / 2]
+                << " with id " << device_ids[i / 2] << std::endl;
+        }
+    }
+    for (bool ok: statuses) {
+        if (!ok) exit(EXIT_FAILURE);
+    }
+
+    std::cout << "All links are ready" << std::endl;
+
+    if (config.check_status) {
+        exit(EXIT_SUCCESS);
+    }
+
     if (!emulation) {
-        std::vector<bool> statuses(config.num_instances);
-        for (uint32_t i = 0; i < config.num_instances; i++) {
-            auroras[i] = Aurora(i % 2, devices[i / 2], xclbin_uuids[i / 2]);
-            statuses[i] = auroras[i].core_status_ok(3000);
-            if (!statuses[i]) {
-                std::cout << "problem with core " << i % 2 
-                    << " on device " << device_bdfs[i / 2] 
-                    << " with id " << device_ids[i / 2] << std::endl;
-            }
-        }
-        for (bool ok: statuses) {
-            if (!ok) exit(EXIT_FAILURE);
-        }
-
-        std::cout << "All links are ready" << std::endl;
-
-        if (config.check_status) {
-            exit(EXIT_SUCCESS);
-        }
-
         config.finish_setup(auroras[0].fifo_width, auroras[0].has_framing(), emulation);
     }
 

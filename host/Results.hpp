@@ -2,7 +2,7 @@ class Results
 {
 public:
     Configuration config;
-    std::vector<Aurora> auroras;
+    std::vector<Aurora> &auroras;
     std::vector<std::string> device_bdfs;
 
     std::vector<uint32_t> aurora_config;
@@ -34,7 +34,7 @@ public:
 
     bool emulation;
 
-    Results(Configuration &config, std::vector<Aurora> auroras, bool emulation, std::vector<std::string> device_bdfs) : config(config), auroras(auroras), device_bdfs(device_bdfs), emulation(emulation)
+    Results(Configuration &config, std::vector<Aurora> &auroras, bool emulation, std::vector<std::string> device_bdfs) : config(config), auroras(auroras), device_bdfs(device_bdfs), emulation(emulation)
     {
         transmission_times.resize(config.num_instances);
         failed_transmissions.resize(config.num_instances);
