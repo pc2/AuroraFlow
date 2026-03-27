@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-PIPE_DIR="${AURORA_PIPE_DIR:-/tmp}"
+PIPE_DIR="${AURORA_PIPE_DIR:-$(pwd)/aurora_emu_$$}"
 export AURORA_PIPE_DIR="$PIPE_DIR"
 export XCL_EMULATION_MODE=sw_emu
 

@@ -181,7 +181,7 @@ LDFLAGS := -L$(XILINX_XRT)/lib
 LDFLAGS += $(LDFLAGS) -lxrt_coreutil -luuid
 
 host_aurora_flow_test: ./host/host_aurora_flow_test.cpp ./host/Aurora.hpp ./host/Results.hpp ./host/Configuration.hpp ./host/Kernel.hpp
-	$(CXX) -o host_aurora_flow_test $< $(CXXFLAGS) $(LDFLAGS)
+	$(MPICXX) -o host_aurora_flow_test $< $(CXXFLAGS) $(LDFLAGS)
 
 host: host_aurora_flow_test
 

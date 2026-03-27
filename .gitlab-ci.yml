@@ -1,7 +1,6 @@
 stages:
-  - testbench
   - build
-  - emulation
+  - test
   - synth
   - run
   - benchmark
@@ -13,12 +12,6 @@ variables:
   SYNTH_SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -q fpgasynthesis -t 4:00:00 -n 1 --mem 64g --cpus-per-task=64"
   SHORT_RUN_SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p fpga -t 00:30:00 -N 1 -n 6"
   LONG_RUN_SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p fpga -t 01:30:00 -N 1 -n 6"
-  SHORT_RUN_SCHEDULER_PARAMETERS_2_14: "${SHORT_RUN_SCHEDULER_PARAMETERS} --constraint=xilinx_u280_xrt2.14"
-  SHORT_RUN_SCHEDULER_PARAMETERS_2_15: "${SHORT_RUN_SCHEDULER_PARAMETERS} --constraint=xilinx_u280_xrt2.15"
-  SHORT_RUN_SCHEDULER_PARAMETERS_2_16: "${SHORT_RUN_SCHEDULER_PARAMETERS} --constraint=xilinx_u280_xrt2.16"
-  LONG_RUN_SCHEDULER_PARAMETERS_2_14: "${LONG_RUN_SCHEDULER_PARAMETERS} --constraint=xilinx_u280_xrt2.14"
-  LONG_RUN_SCHEDULER_PARAMETERS_2_15: "${LONG_RUN_SCHEDULER_PARAMETERS} --constraint=xilinx_u280_xrt2.15"
-  LONG_RUN_SCHEDULER_PARAMETERS_2_16: "${LONG_RUN_SCHEDULER_PARAMETERS} --constraint=xilinx_u280_xrt2.16"
 
 default:
   id_tokens:
@@ -29,8 +22,63 @@ default:
   before_script:
     - source env.sh
 
+# ============================================================
+# Build stage
+# ============================================================
+
+build:host:
+  stage: build
+  parallel:
+    matrix:
+      - XRT: ["2.14", "2.15", "2.16"]
+  script:
+    - ml fpga/xilinx/xrt/$XRT
+    - make host
+    - mkdir -p build/xrt${XRT}
+    - cp host_aurora_flow_test build/xrt${XRT}/
+  artifacts:
+    paths:
+      - build/xrt${XRT}/host_aurora_flow_test
+  needs: []
+
+build:sw_emu:
+  stage: build
+  parallel:
+    matrix:
+      - WIDTH: ["32", "64"]
+  script:
+    - make TARGET=sw_emu FIFO_WIDTH=$WIDTH xclbin
+    - mkdir -p build/sw_emu
+    - cp aurora_flow_test_sw_emu.xclbin build/sw_emu/aurora_flow_test_sw_emu_${WIDTH}.xclbin
+  artifacts:
+    paths:
+      - build/sw_emu/aurora_flow_test_sw_emu_${WIDTH}.xclbin
+  needs: []
+
+# ============================================================
+# Test stage (emulation + testbenches in parallel)
+# ============================================================
+
+emulation:
+  stage: test
+  variables:
+    SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -t 00:30:00 -n 3 --mem 16g"
+  parallel:
+    matrix:
+      - TOPOLOGY: [loopback, pair, ring]
+        WIDTH: ["32", "64"]
+        XRT: ["2.14", "2.15", "2.16"]
+  script:
+    - ml fpga/xilinx/xrt/$XRT
+    - cp build/xrt${XRT}/host_aurora_flow_test .
+    - cp build/sw_emu/aurora_flow_test_sw_emu_${WIDTH}.xclbin aurora_flow_test_sw_emu.xclbin
+    - ./scripts/run_${TOPOLOGY}_sw_emu.sh 3 -r 2 -i 10
+  needs:
+    - build:sw_emu
+    - build:host
+
 tb:nfc:
-  stage: testbench
+  stage: test
   script:
     - make run_nfc_tb
   only:
@@ -45,7 +93,7 @@ tb:nfc:
       - nfc_tb.wdb
 
 tb:monitor:
-  stage: testbench
+  stage: test
   script:
     - make run_monitor_tb
   only:
@@ -60,7 +108,7 @@ tb:monitor:
       - monitor_tb.wdb
 
 tb:configuration:
-  stage: testbench
+  stage: test
   script:
     - make run_configuration_tb
   only:
@@ -74,1130 +122,100 @@ tb:configuration:
       - configuration_tb.vcd
       - configuration_tb.wdb
 
-build:host:2.14:
-  stage: build
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - make host
-  artifacts:
-    paths:
-      - ./host_aurora_flow_test
-  needs: []
+# ============================================================
+# Synth stage (manual trigger)
+# ============================================================
 
-build:host:2.15:
-  stage: build
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - make host
-  artifacts:
-    paths:
-      - ./host_aurora_flow_test
-  needs: []
-
-build:host:2.16:
-  stage: build
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - make host
-  artifacts:
-    paths:
-      - ./host_aurora_flow_test
-  needs: []
-
-build:emulation_xclbin:
-  stage: build
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - make xclbin_emu TARGET=sw_emu
-  artifacts:
-    paths:
-      - ./aurora_flow_test_sw_emu_loopback.xclbin
-  needs: []
-
-build:hlslib_test:
-  stage: build
-  script:
-    - source emulation/env.sh
-    - cd emulation/test
-    - mkdir build
-    - cd build
-    - cmake ..
-    - make
-  only:
-    changes:
-      - emulation/**
-      - .gitlab-ci.yml
-  artifacts:
-    paths:
-      - emulation/test/build/aurora_emu_test
-  needs: []
-
-build:hlslib_example:
-  stage: build
-  script:
-    - source emulation/env.sh
-    - cd emulation/example
-    - mkdir build
-    - cd build
-    - cmake ..
-    - make
-  only:
-    changes:
-      - emulation/**
-      - .gitlab-ci.yml
-  artifacts:
-    paths:
-      - emulation/example/build/aurora_emu_example
-  needs: []
-
-emu:xrt:
-  stage: emulation
-  dependencies:
-    - build:host:2.15
-    - build:emulation_xclbin
-  needs: ["build:emulation_xclbin", "build:host:2.15"]
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - env XCL_EMULATION_MODE=sw_emu ./host_aurora_flow_test -m 0 -r 2 -i 10 
-
-emu:hlslib_test:
-  stage: emulation
-  dependencies:
-    - build:hlslib_test
-  needs: ["build:hlslib_test"]
-  script:
-    - source emulation/env.sh
-    - cd emulation/test/build
-    - ./aurora_emu_test
-
-emu:hlslib_example:
-  stage: emulation
-  dependencies:
-    - build:hlslib_example
-  needs: ["build:hlslib_example", "emu:hlslib_test"]
-  script:
-    - source emulation/env.sh
-    - cd emulation/example/build
-    - ./aurora_emu_example
-
-synth:streaming:64:2.14:
+synth:
   stage: synth
   variables:
     SCHEDULER_PARAMETERS: $SYNTH_SCHEDULER_PARAMETERS
+  parallel:
+    matrix:
+      - FRAMING: ["0", "1"]
+        WIDTH: ["32", "64"]
+        XRT: ["2.14", "2.15", "2.16"]
   script:
-    - ml fpga/xilinx/xrt/2.14
-    - make xclbin USE_FRAMING=0 FIFO_WIDTH=64
-    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_0_64.xclbin
+    - ml fpga/xilinx/xrt/$XRT
+    - make xclbin USE_FRAMING=$FRAMING FIFO_WIDTH=$WIDTH
+    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin
   only:
-    - web 
+    - web
   artifacts:
     paths:
-      - aurora_flow_test_hw_0_64.xclbin
-  needs: ["tb:configuration", "tb:monitor", "tb:nfc", "emu:xrt"]
+      - aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin
+  needs:
+    - emulation
+    - tb:nfc
+    - tb:monitor
+    - tb:configuration
 
-synth:framing:64:2.14:
-  stage: synth
+# ============================================================
+# Run stage (HW tests)
+# ============================================================
+
+run:hw:
+  stage: run
+  parallel:
+    matrix:
+      - TOPOLOGY: [loopback, pair, ring]
+        FRAMING: ["0", "1"]
+        WIDTH: ["32", "64"]
+        XRT: ["2.14", "2.15", "2.16"]
   variables:
-    SCHEDULER_PARAMETERS: $SYNTH_SCHEDULER_PARAMETERS
+    SCHEDULER_PARAMETERS: "${SHORT_RUN_SCHEDULER_PARAMETERS} --constraint=xilinx_u280_xrt${XRT}"
   script:
-    - ml fpga/xilinx/xrt/2.14
-    - make xclbin USE_FRAMING=1 FIFO_WIDTH=64
-    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_1_64.xclbin
+    - ml fpga/xilinx/xrt/$XRT
+    - cp build/xrt${XRT}/host_aurora_flow_test .
+    - ./scripts/run_${TOPOLOGY}_hw.sh -p aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin
   only:
-    - web 
+    - web
   artifacts:
     paths:
-      - aurora_flow_test_hw_1_64.xclbin
-  needs: ["tb:configuration", "tb:monitor", "tb:nfc", "emu:xrt"]
+      - results.csv
+  needs:
+    - synth
+    - build:host
 
-synth:streaming:64:2.15:
-  stage: synth
-  variables:
-    SCHEDULER_PARAMETERS: $SYNTH_SCHEDULER_PARAMETERS
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - make xclbin USE_FRAMING=0 FIFO_WIDTH=64
-    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_0_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-      - aurora_flow_test_hw_0_64.xclbin
-  needs: ["tb:configuration", "tb:monitor", "tb:nfc", "emu:xrt"]
-
-synth:framing:64:2.15:
-  stage: synth
-  variables:
-    SCHEDULER_PARAMETERS: $SYNTH_SCHEDULER_PARAMETERS
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - make xclbin USE_FRAMING=1 FIFO_WIDTH=64
-    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_1_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-      - aurora_flow_test_hw_1_64.xclbin
-  needs: ["tb:configuration", "tb:monitor", "tb:nfc", "emu:xrt"]
-
-synth:streaming:64:2.16:
-  stage: synth
-  variables:
-    SCHEDULER_PARAMETERS: $SYNTH_SCHEDULER_PARAMETERS
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - make xclbin USE_FRAMING=0 FIFO_WIDTH=64
-    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_0_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-      - aurora_flow_test_hw_0_64.xclbin
-  needs: ["tb:configuration", "tb:monitor", "tb:nfc", "emu:xrt"]
-
-synth:framing:64:2.16:
-  stage: synth
-  variables:
-    SCHEDULER_PARAMETERS: $SYNTH_SCHEDULER_PARAMETERS
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - make xclbin USE_FRAMING=1 FIFO_WIDTH=64
-    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_1_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-      - aurora_flow_test_hw_1_64.xclbin
-  needs: ["tb:configuration", "tb:monitor", "tb:nfc", "emu:xrt"]
-
-synth:streaming:32:2.14:
-  stage: synth
-  variables:
-    SCHEDULER_PARAMETERS: $SYNTH_SCHEDULER_PARAMETERS
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - make xclbin USE_FRAMING=0 FIFO_WIDTH=32
-    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_0_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-      - aurora_flow_test_hw_0_32.xclbin
-  needs: ["tb:configuration", "tb:monitor", "tb:nfc", "emu:xrt"]
-
-synth:framing:32:2.14:
-  stage: synth
-  variables:
-    SCHEDULER_PARAMETERS: $SYNTH_SCHEDULER_PARAMETERS
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - make xclbin USE_FRAMING=1 FIFO_WIDTH=32
-    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_1_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-      - aurora_flow_test_hw_1_32.xclbin
-  needs: ["tb:configuration", "tb:monitor", "tb:nfc", "emu:xrt"]
-
-synth:streaming:32:2.15:
-  stage: synth
-  variables:
-    SCHEDULER_PARAMETERS: $SYNTH_SCHEDULER_PARAMETERS
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - make xclbin USE_FRAMING=0 FIFO_WIDTH=32
-    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_0_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-      - aurora_flow_test_hw_0_32.xclbin
-  needs: ["tb:configuration", "tb:monitor", "tb:nfc", "emu:xrt"]
-
-synth:framing:32:2.15:
-  stage: synth
-  variables:
-    SCHEDULER_PARAMETERS: $SYNTH_SCHEDULER_PARAMETERS
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - make xclbin USE_FRAMING=1 FIFO_WIDTH=32
-    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_1_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-      - aurora_flow_test_hw_1_32.xclbin
-  needs: ["tb:configuration", "tb:monitor", "tb:nfc", "emu:xrt"]
-
-synth:streaming:32:2.16:
-  stage: synth
-  variables:
-    SCHEDULER_PARAMETERS: $SYNTH_SCHEDULER_PARAMETERS
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - make xclbin USE_FRAMING=0 FIFO_WIDTH=32
-    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_0_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-      - aurora_flow_test_hw_0_32.xclbin
-  needs: ["tb:configuration", "tb:monitor", "tb:nfc", "emu:xrt"]
-
-synth:framing:32:2.16:
-  stage: synth
-  variables:
-    SCHEDULER_PARAMETERS: $SYNTH_SCHEDULER_PARAMETERS
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - make xclbin USE_FRAMING=1 FIFO_WIDTH=32
-    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_1_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-      - aurora_flow_test_hw_1_32.xclbin
-  needs: ["tb:configuration", "tb:monitor", "tb:nfc", "emu:xrt"]
-  
-run:loopback:streaming:64:2.14:
+run:nfc_test:
   stage: run
+  parallel:
+    matrix:
+      - FRAMING: ["0", "1"]
+        WIDTH: ["32", "64"]
+        XRT: ["2.14", "2.15", "2.16"]
   variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
+    SCHEDULER_PARAMETERS: "${SHORT_RUN_SCHEDULER_PARAMETERS} --constraint=xilinx_u280_xrt${XRT}"
   script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_loopback.sh -p aurora_flow_test_hw_0_64.xclbin
+    - ml fpga/xilinx/xrt/$XRT
+    - cp build/xrt${XRT}/host_aurora_flow_test .
+    - ./scripts/run_pair_hw.sh -p aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin -n -l
   only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.14
-    - synth:streaming:64:2.14
-  needs: ["build:host:2.14", "synth:streaming:64:2.14"]
+    - web
+  needs:
+    - synth
+    - build:host
 
-run:loopback:framing:64:2.14:
-  stage: run
+# ============================================================
+# Benchmark stage
+# ============================================================
+
+benchmark:
+  stage: benchmark
+  parallel:
+    matrix:
+      - XRT: ["2.14", "2.15", "2.16"]
   variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
+    SCHEDULER_PARAMETERS: "${LONG_RUN_SCHEDULER_PARAMETERS} --constraint=xilinx_u280_xrt${XRT}"
   script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_loopback.sh -p aurora_flow_test_hw_1_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.14
-    - synth:framing:64:2.14
-  needs: ["build:host:2.14", "synth:framing:64:2.14"]
-
-run:loopback:streaming:64:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_loopback.sh -p aurora_flow_test_hw_0_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.15
-    - synth:streaming:64:2.15
-  needs: ["build:host:2.15", "synth:streaming:64:2.15"]
-
-run:loopback:framing:64:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_loopback.sh -p aurora_flow_test_hw_1_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.15
-    - synth:framing:64:2.15
-  needs: ["build:host:2.15", "synth:framing:64:2.15"]
-
-run:loopback:streaming:64:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_loopback.sh -p aurora_flow_test_hw_0_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.16
-    - synth:streaming:64:2.16
-  needs: ["build:host:2.16", "synth:streaming:64:2.16"]
-
-run:loopback:framing:64:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_loopback.sh -p aurora_flow_test_hw_1_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.16
-    - synth:framing:64:2.16
-  needs: ["build:host:2.16", "synth:framing:64:2.16"]
-
-
-run:pair:streaming:64:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_0_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.14
-    - synth:streaming:64:2.14
-  needs: ["build:host:2.14", "synth:streaming:64:2.14"]
-
-run:pair:framing:64:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_1_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.14
-    - synth:framing:64:2.14
-  needs: ["build:host:2.14", "synth:framing:64:2.14"]
-
-run:pair:streaming:64:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_0_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.15
-    - synth:streaming:64:2.15
-  needs: ["build:host:2.15", "synth:streaming:64:2.15"]
-
-run:pair:framing:64:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_1_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.15
-    - synth:framing:64:2.15
-  needs: ["build:host:2.15", "synth:framing:64:2.15"]
-
-run:pair:streaming:64:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_0_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.16
-    - synth:streaming:64:2.16
-  needs: ["build:host:2.16", "synth:streaming:64:2.16"]
-
-run:pair:framing:64:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_1_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.16
-    - synth:framing:64:2.16
-  needs: ["build:host:2.16", "synth:framing:64:2.16"]
-
-
-run:ring:streaming:64:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_ring.sh -p aurora_flow_test_hw_0_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.14
-    - synth:streaming:64:2.14
-  needs: ["build:host:2.14", "synth:streaming:64:2.14"]
-
-run:ring:framing:64:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_ring.sh -p aurora_flow_test_hw_1_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.14
-    - synth:framing:64:2.14
-  needs: ["build:host:2.14", "synth:framing:64:2.14"]
-
-run:ring:streaming:64:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_ring.sh -p aurora_flow_test_hw_0_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.15
-    - synth:streaming:64:2.15
-  needs: ["build:host:2.15", "synth:streaming:64:2.15"]
-
-run:ring:framing:64:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_ring.sh -p aurora_flow_test_hw_1_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.15
-    - synth:framing:64:2.15
-  needs: ["build:host:2.15", "synth:framing:64:2.15"]
-
-run:ring:streaming:64:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_ring.sh -p aurora_flow_test_hw_0_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.16
-    - synth:streaming:64:2.16
-  needs: ["build:host:2.16", "synth:streaming:64:2.16"]
-
-run:ring:framing:64:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_ring.sh -p aurora_flow_test_hw_1_64.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.16
-    - synth:framing:64:2.16
-  needs: ["build:host:2.16", "synth:framing:64:2.16"]
-
-run:nfc_test:streaming:64:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_0_64.xclbin -n -l
-  only:
-    - web 
-  dependencies:
-    - build:host:2.14
-    - synth:streaming:64:2.14
-  needs: ["build:host:2.14", "synth:streaming:64:2.14"]
-
-run:nfc_test:framing:64:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_1_64.xclbin -n -l
-  only:
-    - web 
-  dependencies:
-    - build:host:2.14
-    - synth:framing:64:2.14
-  needs: ["build:host:2.14", "synth:framing:64:2.14"]
-
-run:nfc_test:streaming:64:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_0_64.xclbin -n -l
-  only:
-    - web 
-  dependencies:
-    - build:host:2.15
-    - synth:streaming:64:2.15
-  needs: ["build:host:2.15", "synth:streaming:64:2.15"]
-
-run:nfc_test:framing:64:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_1_64.xclbin -n -l
-  only:
-    - web 
-  dependencies:
-    - build:host:2.15
-    - synth:framing:64:2.15
-  needs: ["build:host:2.15", "synth:framing:64:2.15"]
-
-run:nfc_test:streaming:64:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_0_64.xclbin -n -l
-  only:
-    - web 
-  dependencies:
-    - build:host:2.16
-    - synth:streaming:64:2.16
-  needs: ["build:host:2.16", "synth:streaming:64:2.16"]
-
-run:nfc_test:framing:64:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_1_64.xclbin -n -l
-  only:
-    - web 
-  dependencies:
-    - build:host:2.16
-    - synth:framing:64:2.16
-  needs: ["build:host:2.16", "synth:framing:64:2.16"]
-
-run:loopback:streaming:32:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_loopback.sh -p aurora_flow_test_hw_0_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.14
-    - synth:streaming:32:2.14
-  needs: ["build:host:2.14", "synth:streaming:32:2.14"]
-
-run:loopback:framing:32:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_loopback.sh -p aurora_flow_test_hw_1_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.14
-    - synth:framing:32:2.14
-  needs: ["build:host:2.14", "synth:framing:32:2.14"]
-
-run:loopback:streaming:32:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_loopback.sh -p aurora_flow_test_hw_0_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.15
-    - synth:streaming:32:2.15
-  needs: ["build:host:2.15", "synth:streaming:32:2.15"]
-
-run:loopback:framing:32:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_loopback.sh -p aurora_flow_test_hw_1_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.15
-    - synth:framing:32:2.15
-  needs: ["build:host:2.15", "synth:framing:32:2.15"]
-
-run:loopback:streaming:32:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_loopback.sh -p aurora_flow_test_hw_0_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.16
-    - synth:streaming:32:2.16
-  needs: ["build:host:2.16", "synth:streaming:32:2.16"]
-
-run:loopback:framing:32:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_loopback.sh -p aurora_flow_test_hw_1_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.16
-    - synth:framing:32:2.16
-  needs: ["build:host:2.16", "synth:framing:32:2.16"]
-
-run:pair:streaming:32:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_0_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.14
-    - synth:streaming:32:2.14
-  needs: ["build:host:2.14", "synth:streaming:32:2.14"]
-
-run:pair:framing:32:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_1_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.14
-    - synth:framing:32:2.14
-  needs: ["build:host:2.14", "synth:framing:32:2.14"]
-
-run:pair:streaming:32:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_0_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.15
-    - synth:streaming:32:2.15
-  needs: ["build:host:2.15", "synth:streaming:32:2.15"]
-
-run:pair:framing:32:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_1_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.15
-    - synth:framing:32:2.15
-  needs: ["build:host:2.15", "synth:framing:32:2.15"]
-
-run:pair:streaming:32:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_0_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.16
-    - synth:streaming:32:2.16
-  needs: ["build:host:2.16", "synth:streaming:32:2.16"]
-
-run:pair:framing:32:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_1_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.16
-    - synth:framing:32:2.16
-  needs: ["build:host:2.16", "synth:framing:32:2.16"]
-
-run:ring:streaming:32:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_ring.sh -p aurora_flow_test_hw_0_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.14
-    - synth:streaming:32:2.14
-  needs: ["build:host:2.14", "synth:streaming:32:2.14"]
-
-run:ring:framing:32:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_ring.sh -p aurora_flow_test_hw_1_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.14
-    - synth:framing:32:2.14
-  needs: ["build:host:2.14", "synth:framing:32:2.14"]
-
-run:ring:streaming:32:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_ring.sh -p aurora_flow_test_hw_0_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.15
-    - synth:streaming:32:2.15
-  needs: ["build:host:2.15", "synth:streaming:32:2.15"]
-
-run:ring:framing:32:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_ring.sh -p aurora_flow_test_hw_1_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.15
-    - synth:framing:32:2.15
-  needs: ["build:host:2.15", "synth:framing:32:2.15"]
-
-run:ring:streaming:32:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_ring.sh -p aurora_flow_test_hw_0_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.16
-    - synth:streaming:32:2.16
-  needs: ["build:host:2.16", "synth:streaming:32:2.16"]
-
-run:ring:framing:32:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_ring.sh -p aurora_flow_test_hw_1_32.xclbin
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.16
-    - synth:framing:32:2.16
-  needs: ["build:host:2.16", "synth:framing:32:2.16"]
-
-run:nfc_test:streaming:32:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_0_32.xclbin -n -l
-  only:
-    - web 
-  dependencies:
-    - build:host:2.14
-    - synth:streaming:32:2.14
-  needs: ["build:host:2.14", "synth:streaming:32:2.14"]
-
-run:nfc_test:framing:32:2.14:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_1_32.xclbin -n -l
-  only:
-    - web 
-  dependencies:
-    - build:host:2.14
-    - synth:framing:32:2.14
-  needs: ["build:host:2.14", "synth:framing:32:2.14"]
-
-run:nfc_test:streaming:32:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_0_32.xclbin -n -l
-  only:
-    - web 
-  dependencies:
-    - build:host:2.15
-    - synth:streaming:32:2.15
-  needs: ["build:host:2.15", "synth:streaming:32:2.15"]
-
-run:nfc_test:framing:32:2.15:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_1_32.xclbin -n -l
-  only:
-    - web 
-  dependencies:
-    - build:host:2.15
-    - synth:framing:32:2.15
-  needs: ["build:host:2.15", "synth:framing:32:2.15"]
-
-run:nfc_test:streaming:32:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_0_32.xclbin -n -l
-  only:
-    - web 
-  dependencies:
-    - build:host:2.16
-    - synth:streaming:32:2.16
-  needs: ["build:host:2.16", "synth:streaming:32:2.16"]
-
-run:nfc_test:framing:32:2.16:
-  stage: run
-  variables:
-    SCHEDULER_PARAMETERS: $SHORT_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_pair.sh -p aurora_flow_test_hw_1_32.xclbin -n -l
-  only:
-    - web 
-  dependencies:
-    - build:host:2.16
-    - synth:framing:32:2.16
-  needs: ["build:host:2.16", "synth:framing:32:2.16"]
-
-benchmark:2.14:
-  stage: benchmark      
-  variables:
-    SCHEDULER_PARAMETERS: $LONG_RUN_SCHEDULER_PARAMETERS_2_14
-  script:
-    - ml fpga/xilinx/xrt/2.14
+    - ml fpga/xilinx/xrt/$XRT
+    - cp build/xrt${XRT}/host_aurora_flow_test .
     - ./scripts/run_over_all_configs.sh -l -i 20 -b 268435456
   only:
-    - web 
+    - web
   artifacts:
     paths:
-     - results.csv
-  dependencies:
-    - build:host:2.14
-    - synth:streaming:64:2.14
-    - synth:framing:64:2.14
-    - synth:streaming:32:2.14
-    - synth:framing:32:2.14
-  needs: ["build:host:2.14", "synth:streaming:64:2.14", "synth:framing:64:2.14", "run:loopback:streaming:64:2.14", "run:loopback:framing:64:2.14", "run:pair:streaming:64:2.14", "run:pair:framing:64:2.14", "run:ring:streaming:64:2.14", "run:ring:framing:64:2.14", "synth:streaming:32:2.14", "synth:framing:32:2.14","run:loopback:streaming:32:2.14", "run:loopback:framing:32:2.14", "run:pair:streaming:32:2.14", "run:pair:framing:32:2.14", "run:ring:streaming:32:2.14", "run:ring:framing:32:2.14"]
-
-benchmark:2.15:
-  stage: benchmark      
-  variables:
-    SCHEDULER_PARAMETERS: $LONG_RUN_SCHEDULER_PARAMETERS_2_15
-  script:
-    - ml fpga/xilinx/xrt/2.15
-    - ./scripts/run_over_all_configs.sh -l -i 20 -b 268435456
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.15
-    - synth:streaming:64:2.15
-    - synth:framing:64:2.15
-    - synth:streaming:32:2.15
-    - synth:framing:32:2.15
-  needs: ["build:host:2.15", "synth:streaming:64:2.15", "synth:framing:64:2.15", "run:loopback:streaming:64:2.15", "run:loopback:framing:64:2.15", "run:pair:streaming:64:2.15", "run:pair:framing:64:2.15", "run:ring:streaming:64:2.15", "run:ring:framing:64:2.15", "synth:streaming:32:2.15", "synth:framing:32:2.15", "run:loopback:streaming:32:2.15", "run:loopback:framing:32:2.15", "run:pair:streaming:32:2.15", "run:pair:framing:32:2.15", "run:ring:streaming:32:2.15", "run:ring:framing:32:2.15"]
-
-benchmark:2.16:
-  stage: benchmark      
-  variables:
-    SCHEDULER_PARAMETERS: $LONG_RUN_SCHEDULER_PARAMETERS_2_16
-  script:
-    - ml fpga/xilinx/xrt/2.16
-    - ./scripts/run_over_all_configs.sh -l -i 20 -b 268435456
-  only:
-    - web 
-  artifacts:
-    paths:
-     - results.csv
-  dependencies:
-    - build:host:2.16
-    - synth:streaming:64:2.16
-    - synth:framing:64:2.16
-    - synth:streaming:32:2.16
-    - synth:framing:32:2.16
-  needs: ["build:host:2.16", "synth:streaming:64:2.16", "synth:framing:64:2.16", "run:loopback:streaming:64:2.16", "run:loopback:framing:64:2.16", "run:pair:streaming:64:2.16", "run:pair:framing:64:2.16", "run:ring:streaming:64:2.16", "run:ring:framing:64:2.16", "synth:streaming:32:2.16", "synth:framing:32:2.16", "run:loopback:streaming:32:2.16", "run:loopback:framing:32:2.16", "run:pair:streaming:32:2.16", "run:pair:framing:32:2.16", "run:ring:streaming:32:2.16", "run:ring:framing:32:2.16"]
+      - results.csv
+  needs:
+    - build:host
+    - run:hw

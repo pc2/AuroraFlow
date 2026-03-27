@@ -27,6 +27,8 @@ public:
     bool semaphore;
     uint32_t timeout_ms;
     bool wait;
+    int rank = 0;
+    int world_size = 1;
 
     std::vector<uint32_t> instances;
     std::vector<uint32_t> message_sizes;
@@ -85,7 +87,7 @@ public:
             exit(EXIT_FAILURE);
         }
 
-        if (test_mode == 2 && num_instances == 2) {
+        if (test_mode == 2 && num_instances == 2 && std::getenv("XCL_EMULATION_MODE") == nullptr) {
             std::cout << "ring test mode is incompatible with single device selection" << std::endl;
             exit(EXIT_FAILURE);
         }
@@ -111,8 +113,7 @@ public:
         
         instances.resize(num_instances);
         for (uint32_t i = 0; i < num_instances; i++) {
-            uint32_t i_inst = i + (2 * device_id);
-            instances[i] = emulation ? i_inst : i_inst % 2;
+            instances[i] = i + num_instances * rank;
         }
 
         if (!has_framing) {

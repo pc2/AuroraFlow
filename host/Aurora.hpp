@@ -119,13 +119,15 @@ public:
     Aurora(std::string name, xrt::device &device, xrt::uuid &xclbin_uuid)
         : Aurora(xrt::ip(device, xclbin_uuid, name)) {}
 
-    Aurora(uint32_t instance, xrt::device &device, xrt::uuid &xclbin_uuid)
+    Aurora(uint32_t instance, xrt::device &device, xrt::uuid &xclbin_uuid,
+           uint32_t pipe_id = UINT32_MAX)
     {
         const char *emu_mode = std::getenv("XCL_EMULATION_MODE");
         is_emulation = (emu_mode != nullptr && std::string(emu_mode) == "sw_emu");
 
         if (is_emulation) {
-            emu_instance = instance;
+            uint32_t actual_pipe_id = (pipe_id != UINT32_MAX) ? pipe_id : instance;
+            emu_instance = actual_pipe_id;
 
             char name[100];
             snprintf(name, 100, "aurora_file_link:{aurora_file_link_%u}", instance);
@@ -137,7 +139,7 @@ public:
             control_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 
             file_link_run = xrt::run(file_link_kernel);
-            file_link_run.set_arg(2, instance);
+            file_link_run.set_arg(2, actual_pipe_id);
             file_link_run.set_arg(3, control_bo);
             file_link_run.start();
 

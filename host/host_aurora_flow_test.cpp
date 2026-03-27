@@ -24,7 +24,7 @@
 #include <thread>
 #include <iostream>
 #include <filesystem>
-#include <fstream>
+#include <mpi.h>
 
 #include "Configuration.hpp"
 #include "Results.hpp"
@@ -81,9 +81,20 @@ std::string bdf_map(uint32_t device_id, bool emulation)
 
 int main(int argc, char *argv[])
 {
+    MPI_Init(&argc, &argv);
+    int rank = 0, world_size = 1;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
     Configuration config(argc, argv);
- 
+    config.rank = rank;
+    config.world_size = world_size;
+
     bool emulation = (std::getenv("XCL_EMULATION_MODE") != nullptr);
+
+    if (emulation) {
+        config.num_instances = 2;
+    }
 
     if (emulation) {
         config.finish_setup(64, false, emulation);
@@ -117,7 +128,8 @@ int main(int argc, char *argv[])
 
     std::vector<bool> statuses(config.num_instances);
     for (uint32_t i = 0; i < config.num_instances; i++) {
-        auroras[i] = Aurora(i % 2, devices[i / 2], xclbin_uuids[i / 2]);
+        auroras[i] = Aurora(i % 2, devices[i / 2], xclbin_uuids[i / 2],
+                            emulation ? config.instances[i] : UINT32_MAX);
         statuses[i] = auroras[i].core_status_ok(3000);
         if (!statuses[i]) {
             std::cout << "problem with core " << i % 2
@@ -151,11 +163,13 @@ int main(int argc, char *argv[])
     std::vector<SendKernel> send_kernels(config.num_instances);
     std::vector<RecvKernel> recv_kernels(config.num_instances);
     for (uint32_t i = 0; i < config.num_instances; i++) {
-        send_kernels[i] = SendKernel(config.instances[i], devices[emulation ? 0 : i / 2], xclbin_uuids[emulation ? 0 : i / 2], config, data[i]);
-        recv_kernels[i] = RecvKernel(config.instances[i], devices[emulation ? 0 : i / 2], xclbin_uuids[emulation ? 0 : i / 2], config);
+        send_kernels[i] = SendKernel(i % 2, devices[i / 2], xclbin_uuids[i / 2], config, data[i]);
+        recv_kernels[i] = RecvKernel(i % 2, devices[i / 2], xclbin_uuids[i / 2], config);
     }
 
     Results results(config, auroras, emulation, device_bdfs);
+
+    MPI_Barrier(MPI_COMM_WORLD);
 
     for (uint32_t r = 0; r < config.repetitions; r++) {
         std::cout << "Repetition " << r << " with " << config.message_sizes[r] << " bytes" << std::endl;
@@ -264,6 +278,7 @@ int main(int argc, char *argv[])
     results.print_errors();
     results.write();
 
+    MPI_Finalize();
     return results.has_errors();
 }
 
