@@ -2,7 +2,7 @@ class Results
 {
 public:
     Configuration config;
-    std::vector<Aurora> &auroras;
+    std::vector<AuroraFlow> &auroras;
     std::vector<std::string> device_bdfs;
 
     std::vector<uint32_t> aurora_config;
@@ -34,7 +34,7 @@ public:
 
     bool emulation;
 
-    Results(Configuration &config, std::vector<Aurora> &auroras, bool emulation, std::vector<std::string> device_bdfs) : config(config), auroras(auroras), device_bdfs(device_bdfs), emulation(emulation)
+    Results(Configuration &config, std::vector<AuroraFlow> &auroras, bool emulation, std::vector<std::string> device_bdfs) : config(config), auroras(auroras), device_bdfs(device_bdfs), emulation(emulation)
     {
         transmission_times.resize(config.num_instances);
         failed_transmissions.resize(config.num_instances);
@@ -367,7 +367,7 @@ public:
                     line_down_2_sum += line_down_2_count[i][r];
                     line_down_3_sum += line_down_3_count[i][r];
                     pll_not_locked_sum += pll_not_locked_count[i][r];
-                    mmcm_not_locked_sum += pll_not_locked_count[i][r];
+                    mmcm_not_locked_sum += mmcm_not_locked_count[i][r];
                     hard_err_sum += hard_err_count[i][r];
                     soft_err_sum += soft_err_count[i][r];
                     channel_down_sum += channel_down_count[i][r];

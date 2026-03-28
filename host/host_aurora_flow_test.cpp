@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "Aurora.hpp"
+#include "AuroraFlow.hpp"
 #include "experimental/xrt_kernel.h"
 #include "experimental/xrt_ip.h"
 #include "version.h"
@@ -124,11 +124,11 @@ int main(int argc, char *argv[])
     if (config.wait) {
         wait_for_enter();
     }
-    std::vector<Aurora> auroras(config.num_instances);
+    std::vector<AuroraFlow> auroras(config.num_instances);
 
     std::vector<bool> statuses(config.num_instances);
     for (uint32_t i = 0; i < config.num_instances; i++) {
-        auroras[i] = Aurora(i % 2, devices[i / 2], xclbin_uuids[i / 2],
+        auroras[i] = AuroraFlow(i % 2, devices[i / 2], xclbin_uuids[i / 2],
                             emulation ? config.instances[i] : UINT32_MAX);
         statuses[i] = auroras[i].core_status_ok(3000);
         if (!statuses[i]) {
@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
 
     config.print();
     if (!emulation) {
-        std::cout << "Aurora core has framing " << (auroras[0].has_framing() ? "enabled" : "disabled")
+        std::cout << "AuroraFlow core has framing " << (auroras[0].has_framing() ? "enabled" : "disabled")
                   << " and input width of " << auroras[0].fifo_width << " bytes" << std::endl;
     }
 
@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
             uint32_t i_recv = mode_map(i, config.num_instances, config.test_mode);
             SendKernel &send = send_kernels[i];
             RecvKernel &recv = recv_kernels[i_recv];
-            Aurora &recv_aurora = auroras[i_recv];
+            AuroraFlow &recv_aurora = auroras[i_recv];
             std::cout << "Sending from " << i << " to " << i_recv << std::endl;
             try {
                 send.prepare_repetition(r);

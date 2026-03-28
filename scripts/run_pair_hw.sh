@@ -12,6 +12,6 @@ fi
 
 ./scripts/reset.sh
 
-./scripts/configure_pair.sh
+./scripts/configure_pair_hw.sh
 
 ./host_aurora_flow_test -m 1 $@

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023-2024 Gerrit Pape (papeg@mail.upb.de)
+ * Copyright 2023-2026 Gerrit Pape (gerrit.pape@uni-paderborn.de)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,18 +108,18 @@ static const char *rx_eq_mode_names[4] = {
     ""
 };
 
-class Aurora
+class AuroraFlow
 {
 public:
-    Aurora(xrt::ip ip) : ip(ip), is_emulation(false)
+    AuroraFlow(xrt::ip ip) : ip(ip), is_emulation(false)
     {
         read_configuration();
     }
 
-    Aurora(std::string name, xrt::device &device, xrt::uuid &xclbin_uuid)
-        : Aurora(xrt::ip(device, xclbin_uuid, name)) {}
+    AuroraFlow(std::string name, xrt::device &device, xrt::uuid &xclbin_uuid)
+        : AuroraFlow(xrt::ip(device, xclbin_uuid, name)) {}
 
-    Aurora(uint32_t instance, xrt::device &device, xrt::uuid &xclbin_uuid,
+    AuroraFlow(uint32_t instance, xrt::device &device, xrt::uuid &xclbin_uuid,
            uint32_t pipe_id = UINT32_MAX)
     {
         const char *emu_mode = std::getenv("XCL_EMULATION_MODE");
@@ -130,7 +130,7 @@ public:
             emu_instance = actual_pipe_id;
 
             char name[100];
-            snprintf(name, 100, "aurora_file_link:{aurora_file_link_%u}", instance);
+            snprintf(name, 100, "aurora_flow_emu:{aurora_flow_emu_%u}", instance);
             file_link_kernel = xrt::kernel(device, xclbin_uuid, name);
 
             control_bo = xrt::bo(device, sizeof(unsigned int), xrt::bo::flags::normal, file_link_kernel.group_id(3));
@@ -152,21 +152,21 @@ public:
         }
     }
 
-    Aurora() : is_emulation(false) { set_emulation_defaults(); }
+    AuroraFlow() : is_emulation(false) { set_emulation_defaults(); }
 
-    Aurora(const Aurora&) = delete;
-    Aurora& operator=(const Aurora&) = delete;
+    AuroraFlow(const AuroraFlow&) = delete;
+    AuroraFlow& operator=(const AuroraFlow&) = delete;
 
-    Aurora(Aurora&& other) noexcept { move_from(std::move(other)); }
+    AuroraFlow(AuroraFlow&& other) noexcept { move_from(std::move(other)); }
 
-    Aurora& operator=(Aurora&& other) noexcept
+    AuroraFlow& operator=(AuroraFlow&& other) noexcept
     {
         shutdown();
         move_from(std::move(other));
         return *this;
     }
 
-    ~Aurora() { shutdown(); }
+    ~AuroraFlow() { shutdown(); }
 
     void shutdown()
     {
@@ -410,7 +410,7 @@ public:
 
     uint32_t get_nfc_empty_trigger_count()
     {
-        return ip.read_register(NFC_FULL_TRIGGER_COUNT_ADDRESS);
+        return ip.read_register(NFC_EMPTY_TRIGGER_COUNT_ADDRESS);
     }
 
     uint32_t get_nfc_latency_count()
@@ -506,7 +506,7 @@ public:
         std::cout << "TX: " << get_tx_count() << std::endl;
         std::cout << "RX: " << get_rx_count() << std::endl;
         if (has_framing()) {
-            std::cout << "Frames receveived: " << get_frames_received();
+            std::cout << "Frames received: " << get_frames_received();
             std::cout << "Frames with errors: " << get_frames_with_errors();
         }
         std::cout << "TX Overflow: " << get_fifo_tx_overflow_count() << std::endl;
@@ -521,7 +521,7 @@ public:
         std::cout << "Line Down: " << get_line_down_0_count() << " "
                                    << get_line_down_1_count() << " "
                                    << get_line_down_2_count() << " "
-                                   << get_line_down_2_count() << std::endl;
+                                   << get_line_down_3_count() << std::endl;
         std::cout << "PLL not locked: " << get_pll_not_locked_count() << std::endl;
         std::cout << "MMCM not locked: " << get_mmcm_not_locked_count() << std::endl;
         std::cout << "Hard error: " << get_hard_err_count() << std::endl;
@@ -588,7 +588,7 @@ private:
         fifo_prog_empty_threshold = 0;
     }
 
-    void move_from(Aurora&& other)
+    void move_from(AuroraFlow&& other)
     {
         ip = std::move(other.ip);
         file_link_kernel = std::move(other.file_link_kernel);

@@ -165,11 +165,11 @@ send_$(TARGET).xo: ./hls/send.cpp
 aurora_flow_test_hw.xclbin: aurora send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_$(TARGET).cfg
 	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_test_$(TARGET) --config aurora_flow_test_$(TARGET).cfg --output $@ aurora_flow_0.xo aurora_flow_1.xo recv_$(TARGET).xo send_$(TARGET).xo
 
-aurora_file_link_$(TARGET).xo: ./hls/aurora_file_link.cpp
-	v++ $(HLSCFLAGS) --temp_dir _x_aurora_file_link --kernel aurora_file_link --output $@ $^
+aurora_flow_sw_emu.xo: ./hls/aurora_flow_emu.cpp
+	v++ $(HLSCFLAGS) --temp_dir _x_aurora_flow_emu --kernel aurora_flow_emu --output $@ $^
 
-aurora_flow_test_sw_emu.xclbin: aurora_file_link_$(TARGET).xo send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_$(TARGET).cfg
-	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_$(TARGET) --config aurora_flow_test_$(TARGET).cfg --output $@ aurora_file_link_$(TARGET).xo recv_$(TARGET).xo send_$(TARGET).xo
+aurora_flow_test_sw_emu.xclbin: aurora_flow_sw_emu.xo send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_$(TARGET).cfg
+	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_$(TARGET) --config aurora_flow_test_$(TARGET).cfg --output $@ aurora_flow_sw_emu.xo recv_$(TARGET).xo send_$(TARGET).xo
 
 xclbin: aurora_flow_test_$(TARGET).xclbin
 
@@ -180,7 +180,7 @@ CXXFLAGS += -fopenmp
 LDFLAGS := -L$(XILINX_XRT)/lib
 LDFLAGS += $(LDFLAGS) -lxrt_coreutil -luuid
 
-host_aurora_flow_test: ./host/host_aurora_flow_test.cpp ./host/Aurora.hpp ./host/Results.hpp ./host/Configuration.hpp ./host/Kernel.hpp
+host_aurora_flow_test: ./host/host_aurora_flow_test.cpp ./host/AuroraFlow.hpp ./host/Results.hpp ./host/Configuration.hpp ./host/Kernel.hpp
 	$(MPICXX) -o host_aurora_flow_test $< $(CXXFLAGS) $(LDFLAGS)
 
 host: host_aurora_flow_test

@@ -60,7 +60,7 @@ static bool read_full(int fd, void *buf, size_t count) {
 
 extern "C" {
 
-void aurora_file_link(
+void aurora_flow_emu(
     hls::stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &tx_axis,
     hls::stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &rx_axis,
     unsigned int pipe_id,
