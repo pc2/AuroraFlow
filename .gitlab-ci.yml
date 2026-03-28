@@ -72,7 +72,7 @@ emulation:
     - ml fpga/xilinx/xrt/$XRT
     - cp build/xrt${XRT}/host_aurora_flow_test .
     - cp build/sw_emu/aurora_flow_test_sw_emu_${WIDTH}.xclbin aurora_flow_test_sw_emu.xclbin
-    - ./scripts/run_${TOPOLOGY}_sw_emu.sh 3 -r 2 -i 10
+    - ./scripts/run_${TOPOLOGY}_emu.sh sw_emu 3 -r 2 -i 10
   needs:
     - build:sw_emu
     - build:host

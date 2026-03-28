@@ -123,12 +123,12 @@ public:
            uint32_t pipe_id = UINT32_MAX)
     {
         const char *emu_mode = std::getenv("XCL_EMULATION_MODE");
-        is_emulation = (emu_mode != nullptr && std::string(emu_mode) == "sw_emu");
+        is_sw_emu = (emu_mode != nullptr && std::string(emu_mode) == "sw_emu");
+        bool hw_emu = (emu_mode != nullptr && std::string(emu_mode) == "hw_emu");
+        is_emulation = is_sw_emu || hw_emu;
+        emu_instance = (pipe_id != UINT32_MAX) ? pipe_id : instance;
 
-        if (is_emulation) {
-            uint32_t actual_pipe_id = (pipe_id != UINT32_MAX) ? pipe_id : instance;
-            emu_instance = actual_pipe_id;
-
+        if (is_sw_emu) {
             char name[100];
             snprintf(name, 100, "aurora_flow_emu:{aurora_flow_emu_%u}", instance);
             file_link_kernel = xrt::kernel(device, xclbin_uuid, name);
@@ -139,7 +139,7 @@ public:
             control_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 
             file_link_run = xrt::run(file_link_kernel);
-            file_link_run.set_arg(2, actual_pipe_id);
+            file_link_run.set_arg(2, emu_instance);
             file_link_run.set_arg(3, control_bo);
             file_link_run.start();
 
@@ -170,12 +170,12 @@ public:
 
     void shutdown()
     {
-        if (!is_emulation) return;
+        if (!is_sw_emu) return;
         unsigned int one = 1;
         control_bo.write(&one);
         control_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
         file_link_run.wait(std::chrono::milliseconds(5000));
-        is_emulation = false;
+        is_sw_emu = false;
     }
 
     // Configuration
@@ -561,6 +561,7 @@ private:
     xrt::bo control_bo;
     uint32_t emu_instance = 0;
     bool is_emulation = false;
+    bool is_sw_emu = false;
 
     void read_configuration()
     {
@@ -604,6 +605,7 @@ private:
         fifo_prog_empty_threshold = other.fifo_prog_empty_threshold;
         emu_instance = other.emu_instance;
         is_emulation = std::exchange(other.is_emulation, false);
+        is_sw_emu = std::exchange(other.is_sw_emu, false);
     }
 };
 

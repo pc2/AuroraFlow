@@ -7,8 +7,8 @@ venv
 host_aurora_flow_test
 host_aurora_flow_ring
 ip_creation*
-aurora_flow_0_project*
-aurora_flow_1_project*
+aurora_flow_*0_project*
+aurora_flow_*1_project*
 rtl/aurora_flow_0.v
 rtl/aurora_flow_1.v
 rtl/aurora_flow_define.v
