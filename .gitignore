@@ -36,3 +36,4 @@ eval/.ipynb_checkpoints
 *.wcfg
 build
 scripts/run_ring_n*.sh
+emconfig.json

@@ -208,7 +208,10 @@ aurora_flow_hw_emu_1.xo: $(RTL_EMU_SRC_1) ./tcl/pack_kernel_hw_emu.tcl
 aurora_flow_test_hw_emu.xclbin: aurora_flow_hw_emu_0.xo aurora_flow_hw_emu_1.xo send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_hw_emu.cfg
 	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_test_hw_emu --config aurora_flow_test_hw_emu.cfg --output $@ aurora_flow_hw_emu_0.xo aurora_flow_hw_emu_1.xo recv_$(TARGET).xo send_$(TARGET).xo
 
-xclbin: aurora_flow_test_$(TARGET).xclbin
+emconfig.json:
+	emconfigutil --platform $(PLATFORM)
+
+xclbin: aurora_flow_test_$(TARGET).xclbin emconfig.json
 
 # host build for example
 CXXFLAGS += -std=c++17 -Wall -g
