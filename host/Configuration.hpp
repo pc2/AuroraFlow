@@ -70,6 +70,12 @@ public:
         }
 
         xclbin_path = result["xclbin_path"].as<std::string>();
+        if (result.count("xclbin_path") == 0) {
+            const char *emu_mode = std::getenv("XCL_EMULATION_MODE");
+            if (emu_mode != nullptr) {
+                xclbin_path = std::string("aurora_flow_test_") + emu_mode + ".xclbin";
+            }
+        }
         repetitions = result["repetitions"].as<uint32_t>();
         iterations = result["iterations"].as<uint32_t>();
         max_frame_size = result["frame_size"].as<uint32_t>();
@@ -107,10 +113,6 @@ public:
             exit(EXIT_FAILURE);
         }
 
-        if (emulation) {
-            xclbin_path = "aurora_flow_test_sw_emu.xclbin";
-        }
-        
         instances.resize(num_instances);
         for (uint32_t i = 0; i < num_instances; i++) {
             instances[i] = i + num_instances * rank;
