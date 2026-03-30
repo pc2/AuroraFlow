@@ -59,3 +59,4 @@ assign fifo_thresholds = {
 };
 
 endmodule
+`default_nettype wire

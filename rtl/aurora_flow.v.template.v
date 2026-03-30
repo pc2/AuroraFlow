@@ -756,3 +756,4 @@ aurora_flow_control_s_axi axi_control_slave (
 );
 
 endmodule
+`default_nettype wire

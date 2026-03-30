@@ -47,3 +47,4 @@ always @ (posedge init_clk or negedge ap_rst_n_i) begin
 end
 
 endmodule
+`default_nettype wire
