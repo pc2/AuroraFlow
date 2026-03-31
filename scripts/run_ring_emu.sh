@@ -11,4 +11,4 @@ mkdir -p "$AURORA_PIPE_DIR"
 trap 'rm -rf "$AURORA_PIPE_DIR"' EXIT
 
 ./scripts/configure_ring_emu.sh $NUM_RANKS
-mpirun -n $NUM_RANKS ./host_aurora_flow_test -m 2 -p aurora_flow_test_${EMU_MODE}.xclbin "$@"
+mpirun -x AURORA_PIPE_DIR -x XCL_EMULATION_MODE -n $NUM_RANKS ./host_aurora_flow_test -m 2 "$@"

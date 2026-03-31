@@ -29,38 +29,47 @@ static int tx_fds[MAX_INSTANCES] = {-1, -1};
 static int rx_fds[MAX_INSTANCES] = {-1, -1};
 
 void aurora_dpi_open(int instance, int pipe_id) {
+    if (instance < 0 || instance >= MAX_INSTANCES) {
+        printf("aurora_dpi: invalid instance %d\n", instance);
+        fflush(stdout);
+        return;
+    }
+
     char path[256];
     const char *dir = getenv("AURORA_PIPE_DIR");
     if (!dir) dir = ".";
 
-    // Open RX first (O_RDONLY|O_NONBLOCK succeeds immediately on FIFOs)
+    printf("aurora_dpi[%d]: pipe_dir=%s pipe_id=%d\n", instance, dir, pipe_id);
+    fflush(stdout);
+
     snprintf(path, sizeof(path), "%s/aurora_%d_rx", dir, pipe_id);
     rx_fds[instance] = open(path, O_RDONLY | O_NONBLOCK);
-    if (rx_fds[instance] < 0)
-        fprintf(stderr, "aurora_dpi[%d]: open RX %s failed: %s\n", instance, path, strerror(errno));
+    printf("aurora_dpi[%d]: open RX %s = %d %s\n", instance, path,
+           rx_fds[instance], rx_fds[instance] < 0 ? strerror(errno) : "ok");
+    fflush(stdout);
 
-    // Open TX (retry until reader exists, for multi-process startup)
     snprintf(path, sizeof(path), "%s/aurora_%d_tx", dir, pipe_id);
+    int retries = 0;
     tx_fds[instance] = open(path, O_WRONLY | O_NONBLOCK);
-    while (tx_fds[instance] < 0 && errno == ENXIO) {
+    while (tx_fds[instance] < 0 && errno == ENXIO && retries < 5000) {
         usleep(1000);
         tx_fds[instance] = open(path, O_WRONLY | O_NONBLOCK);
+        retries++;
     }
-    if (tx_fds[instance] < 0)
-        fprintf(stderr, "aurora_dpi[%d]: open TX %s failed: %s\n", instance, path, strerror(errno));
-
-    fprintf(stderr, "aurora_dpi[%d]: pipes connected (pipe_id=%d)\n", instance, pipe_id);
+    printf("aurora_dpi[%d]: open TX %s = %d %s (retries=%d)\n", instance, path,
+           tx_fds[instance], tx_fds[instance] < 0 ? strerror(errno) : "ok", retries);
+    fflush(stdout);
 }
 
 int aurora_dpi_write(int instance, const svBitVecVal *data) {
-    if (tx_fds[instance] < 0) return 0;
+    if (instance < 0 || instance >= MAX_INSTANCES || tx_fds[instance] < 0) return 0;
     ssize_t n = write(tx_fds[instance], data, DATA_BYTES);
     if (n == DATA_BYTES) return 1;
     return 0;
 }
 
 int aurora_dpi_read(int instance, svBitVecVal *data) {
-    if (rx_fds[instance] < 0) return 0;
+    if (instance < 0 || instance >= MAX_INSTANCES || rx_fds[instance] < 0) return 0;
     ssize_t total = 0;
     while (total < DATA_BYTES) {
         ssize_t n = read(rx_fds[instance], (char *)data + total, DATA_BYTES - total);
@@ -79,7 +88,9 @@ int aurora_dpi_read(int instance, svBitVecVal *data) {
 }
 
 void aurora_dpi_close(int instance) {
+    if (instance < 0 || instance >= MAX_INSTANCES) return;
     if (tx_fds[instance] >= 0) { close(tx_fds[instance]); tx_fds[instance] = -1; }
     if (rx_fds[instance] >= 0) { close(rx_fds[instance]); rx_fds[instance] = -1; }
-    fprintf(stderr, "aurora_dpi[%d]: closed\n", instance);
+    printf("aurora_dpi[%d]: closed\n", instance);
+    fflush(stdout);
 }

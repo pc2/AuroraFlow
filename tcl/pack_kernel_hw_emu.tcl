@@ -33,12 +33,12 @@ add_files -norecurse -fileset sources_1 \
               ../rtl/aurora_flow_configuration.v \
               ../rtl/aurora_flow_monitor.v \
               ../rtl/aurora_flow_gt_stub.sv \
-              ../rtl/aurora_flow_dpi.c \
               ../ip_creation/axis_data_fifo_rx/axis_data_fifo_rx.xci \
               ../ip_creation/axis_data_fifo_tx/axis_data_fifo_tx.xci \
               ../ip_creation/axis_dwidth_converter_rx/axis_dwidth_converter_rx.xci \
               ../ip_creation/axis_dwidth_converter_tx/axis_dwidth_converter_tx.xci \
        ]
+
 
 update_compile_order -fileset sources_1
 

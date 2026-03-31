@@ -206,7 +206,9 @@ aurora_flow_hw_emu_1.xo: $(RTL_EMU_SRC_1) ./tcl/pack_kernel_hw_emu.tcl
 	cd aurora_flow_hw_emu_1_project && vivado -mode batch -source ../tcl/pack_kernel_hw_emu.tcl -tclargs $(PART) 1
 
 aurora_flow_test_hw_emu.xclbin: aurora_flow_hw_emu_0.xo aurora_flow_hw_emu_1.xo send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_hw_emu.cfg
-	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_test_hw_emu --config aurora_flow_test_hw_emu.cfg --output $@ aurora_flow_hw_emu_0.xo aurora_flow_hw_emu_1.xo recv_$(TARGET).xo send_$(TARGET).xo
+	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_test_hw_emu --config aurora_flow_test_hw_emu.cfg \
+		--vivado.prop "fileset.sim_1.{xsim.compile.xsc.more_options}={$(CURDIR)/rtl/aurora_flow_dpi.c}" \
+		--output $@ aurora_flow_hw_emu_0.xo aurora_flow_hw_emu_1.xo recv_$(TARGET).xo send_$(TARGET).xo
 
 emconfig.json:
 	emconfigutil --platform $(PLATFORM)
