@@ -100,37 +100,29 @@ HLSCFLAGS := --compile $(COMMFLAGS) -DDATA_WIDTH_BYTES=$(FIFO_WIDTH)
 LINKFLAGS := --link --optimize 3 $(COMMFLAGS)
 
 # collect the RTL source code
-RTL_SRC := ./rtl/aurora_flow_control_s_axi.v
-RTL_SRC += ./rtl/aurora_flow_io.v
-RTL_SRC += ./rtl/aurora_flow_nfc.v
-RTL_SRC += ./rtl/aurora_flow_define.v
-RTL_SRC += ./rtl/aurora_flow_configuration.v
+RTL_SRC := $(RTL_COMMON_SRC)
 RTL_SRC += ./rtl/aurora_flow_reset.v
-RTL_SRC += ./rtl/aurora_flow_monitor.v
-RTL_SRC += ./ip_creation/aurora_64b66b_0/aurora_64b66b_0.xci 
-RTL_SRC += ./ip_creation/axis_data_fifo_rx/axis_data_fifo_rx.xci
-RTL_SRC += ./ip_creation/axis_data_fifo_tx/axis_data_fifo_tx.xci
-RTL_SRC += ./ip_creation/axis_dwidth_converter_rx/axis_dwidth_converter_rx.xci
-RTL_SRC += ./ip_creation/axis_dwidth_converter_tx/axis_dwidth_converter_tx.xci
+RTL_SRC += ./ip_creation/aurora_64b66b_0/aurora_64b66b_0.xci
 
 RTL_SRC_0 := $(RTL_SRC) ./rtl/aurora_flow_0.v ./xdc/aurora_64b66b_0.xdc
 RTL_SRC_1 := $(RTL_SRC) ./rtl/aurora_flow_1.v ./xdc/aurora_64b66b_1.xdc
 
-RTL_EMU_SRC := ./rtl/aurora_flow_control_s_axi.v
-RTL_EMU_SRC += ./rtl/aurora_flow_io.v
-RTL_EMU_SRC += ./rtl/aurora_flow_nfc.v
-RTL_EMU_SRC += ./rtl/aurora_flow_define.v
-RTL_EMU_SRC += ./rtl/aurora_flow_configuration.v
-RTL_EMU_SRC += ./rtl/aurora_flow_monitor.v
-RTL_EMU_SRC += ./rtl/aurora_flow_gt_stub.sv
-RTL_EMU_SRC += ./rtl/aurora_flow_dpi.c
-RTL_EMU_SRC += ./ip_creation/axis_data_fifo_rx/axis_data_fifo_rx.xci
-RTL_EMU_SRC += ./ip_creation/axis_data_fifo_tx/axis_data_fifo_tx.xci
-RTL_EMU_SRC += ./ip_creation/axis_dwidth_converter_rx/axis_dwidth_converter_rx.xci
-RTL_EMU_SRC += ./ip_creation/axis_dwidth_converter_tx/axis_dwidth_converter_tx.xci
+RTL_COMMON_SRC := ./rtl/aurora_flow_control_s_axi.v
+RTL_COMMON_SRC += ./rtl/aurora_flow_io.v
+RTL_COMMON_SRC += ./rtl/aurora_flow_nfc.v
+RTL_COMMON_SRC += ./rtl/aurora_flow_define.v
+RTL_COMMON_SRC += ./rtl/aurora_flow_configuration.v
+RTL_COMMON_SRC += ./rtl/aurora_flow_monitor.v
+RTL_COMMON_SRC += ./ip_creation/axis_data_fifo_rx/axis_data_fifo_rx.xci
+RTL_COMMON_SRC += ./ip_creation/axis_data_fifo_tx/axis_data_fifo_tx.xci
+RTL_COMMON_SRC += ./ip_creation/axis_dwidth_converter_rx/axis_dwidth_converter_rx.xci
+RTL_COMMON_SRC += ./ip_creation/axis_dwidth_converter_tx/axis_dwidth_converter_tx.xci
 
-RTL_EMU_SRC_0 := $(RTL_EMU_SRC) ./rtl/aurora_flow_hw_emu_0.v
-RTL_EMU_SRC_1 := $(RTL_EMU_SRC) ./rtl/aurora_flow_hw_emu_1.v
+RTL_EMU_SRC := $(RTL_COMMON_SRC)
+RTL_EMU_SRC += ./rtl/aurora_flow_gt_stub.sv
+
+RTL_EMU_SRC_0 := $(RTL_EMU_SRC) ./rtl/aurora_flow_0.v
+RTL_EMU_SRC_1 := $(RTL_EMU_SRC) ./rtl/aurora_flow_1.v
 
 # some verilog templating
 ./rtl/aurora_flow_0.v: ./rtl/aurora_flow.v.template.v
@@ -140,14 +132,6 @@ RTL_EMU_SRC_1 := $(RTL_EMU_SRC) ./rtl/aurora_flow_hw_emu_1.v
 ./rtl/aurora_flow_1.v: ./rtl/aurora_flow.v.template.v
 	cp ./rtl/aurora_flow.v.template.v ./rtl/aurora_flow_1.v
 	sed -i 's/@@@instance@@@/1/g' ./rtl/aurora_flow_1.v
-
-./rtl/aurora_flow_hw_emu_0.v: ./rtl/aurora_flow_hw_emu.v.template.v
-	cp ./rtl/aurora_flow_hw_emu.v.template.v ./rtl/aurora_flow_hw_emu_0.v
-	sed -i 's/@@@instance@@@/0/g' ./rtl/aurora_flow_hw_emu_0.v
-
-./rtl/aurora_flow_hw_emu_1.v: ./rtl/aurora_flow_hw_emu.v.template.v
-	cp ./rtl/aurora_flow_hw_emu.v.template.v ./rtl/aurora_flow_hw_emu_1.v
-	sed -i 's/@@@instance@@@/1/g' ./rtl/aurora_flow_hw_emu_1.v
 
 ./rtl/aurora_flow_define.v:
 	echo "" > $@

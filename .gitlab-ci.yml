@@ -55,6 +55,20 @@ build:sw_emu:
       - build/sw_emu/aurora_flow_test_sw_emu_${WIDTH}.xclbin
   needs: []
 
+build:hw_emu:
+  stage: build
+  parallel:
+    matrix:
+      - WIDTH: ["32", "64"]
+  script:
+    - make TARGET=hw_emu FIFO_WIDTH=$WIDTH xclbin
+    - mkdir -p build/hw_emu
+    - cp aurora_flow_test_hw_emu.xclbin build/hw_emu/aurora_flow_test_hw_emu_${WIDTH}.xclbin
+  artifacts:
+    paths:
+      - build/hw_emu/aurora_flow_test_hw_emu_${WIDTH}.xclbin
+  needs: []
+
 # ============================================================
 # Test stage (emulation + testbenches in parallel)
 # ============================================================
@@ -76,6 +90,25 @@ emulation:
   needs:
     - build:sw_emu
     - build:host
+
+hw_emulation:
+  stage: test
+  variables:
+    SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -t 01:00:00 -n 3 --mem 16g"
+  parallel:
+    matrix:
+      - TOPOLOGY: [loopback, pair, ring]
+        WIDTH: ["32", "64"]
+        XRT: ["2.14", "2.15", "2.16"]
+  script:
+    - ml fpga/xilinx/xrt/$XRT
+    - cp build/xrt${XRT}/host_aurora_flow_test .
+    - cp build/hw_emu/aurora_flow_test_hw_emu_${WIDTH}.xclbin aurora_flow_test_hw_emu.xclbin
+    - ./scripts/run_${TOPOLOGY}_emu.sh hw_emu 3 -r 2 -i 2 -b 256
+  needs:
+    - build:hw_emu
+    - build:host
+    - emulation
 
 tb:nfc:
   stage: test
@@ -146,6 +179,7 @@ synth:
       - aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin
   needs:
     - emulation
+    - hw_emulation
     - tb:nfc
     - tb:monitor
     - tb:configuration

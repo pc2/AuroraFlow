@@ -23,13 +23,19 @@ set instance [lindex $argv 1]
 
 create_project aurora_flow_${instance} ./aurora_flow_${instance} -part [lindex $argv 0]
 
+# Create hw_emu define file with HW_EMU added
+file copy -force ../rtl/aurora_flow_define.v ./aurora_flow_define.v
+set fd [open ./aurora_flow_define.v a]
+puts $fd "`define HW_EMU"
+close $fd
+
 add_files -norecurse -fileset sources_1 \
        [list                                          \
               ../rtl/aurora_flow_control_s_axi.v \
-              ../rtl/aurora_flow_hw_emu_$instance.v \
+              ../rtl/aurora_flow_$instance.v \
               ../rtl/aurora_flow_io.v \
               ../rtl/aurora_flow_nfc.v \
-              ../rtl/aurora_flow_define.v \
+              ./aurora_flow_define.v \
               ../rtl/aurora_flow_configuration.v \
               ../rtl/aurora_flow_monitor.v \
               ../rtl/aurora_flow_gt_stub.sv \
@@ -39,6 +45,7 @@ add_files -norecurse -fileset sources_1 \
               ../ip_creation/axis_dwidth_converter_tx/axis_dwidth_converter_tx.xci \
        ]
 
+set_property verilog_define {HW_EMU} [current_fileset]
 
 update_compile_order -fileset sources_1
 

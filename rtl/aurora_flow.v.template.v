@@ -1,6 +1,6 @@
 //
 // Copyright 2022 Xilinx, Inc.
-//           2023-2024 Gerrit Pape (papeg@mail.upb.de)
+//           2023-2026 Gerrit Pape (papeg@mail.upb.de)
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -55,7 +55,8 @@ module aurora_flow_@@@instance@@@ (
     output wire [1:0]    s_axi_control_rresp  ,
     output wire          s_axi_control_bvalid ,
     input wire           s_axi_control_bready ,
-    output wire [1:0]    s_axi_control_bresp  , 
+`ifndef HW_EMU
+    output wire [1:0]    s_axi_control_bresp  ,
 
 // GT ref clock
     input wire           gt_refclk_@@@instance@@@_p,
@@ -67,6 +68,9 @@ module aurora_flow_@@@instance@@@ (
 
 // assume 50MHz init clk
     input wire           init_clk
+`else
+    output wire [1:0]    s_axi_control_bresp
+`endif
 );
 
 
@@ -78,7 +82,7 @@ wire [255:0]    s_axi_tx_tdata_u;
 wire            s_axi_tx_tvalid_u;
 wire            s_axi_tx_tready_u;
 `ifdef USE_FRAMING
-wire            s_axi_tx_tlast_u;  
+wire            s_axi_tx_tlast_u;
 wire [31:0]     s_axi_tx_tkeep_u;
 `endif
 
@@ -97,7 +101,7 @@ wire            rx_tvalid_u;
 
 // aurora status signals
 //   user_clk domain
-wire [3:0]      line_up_u; 
+wire [3:0]      line_up_u;
 wire            channel_up_u;
 wire            soft_err_u;
 wire            hard_err_u;
@@ -109,8 +113,10 @@ wire            crc_valid_u;
 `endif
 wire            gt_pll_lock_u;
 
+`ifndef HW_EMU
 //   init_clk domain
 wire            gt_pll_lock_i;
+`endif
 
 //   ap_clk domain
 wire [3:0]      line_up_sync;
@@ -159,8 +165,16 @@ wire             pma_init_i;
 
 wire             reset_pb_u;
 
+`ifdef HW_EMU
+// no GT reset needed in hw_emu
+assign reset_pb_i = 1'b0;
+assign pma_init_i = 1'b0;
+`endif
+
 // aurora reset generation
+`ifndef HW_EMU
 wire            ap_rst_n_i;
+`endif
 wire            ap_rst_n_u;
 
 // software-controllable reset
@@ -176,6 +190,7 @@ wire            tx_axis_tready_raw;
     assign tx_axis_tready = tx_axis_tready_raw;
 `endif
 
+`ifndef HW_EMU
 aurora_flow_reset aurora_flow_reset_0 (
     .init_clk(init_clk),
     .ap_rst_n_i(ap_rst_n_i),
@@ -188,6 +203,7 @@ xpm_cdc_async_rst reset_sync_0 (
     .dest_clk   (init_clk),
     .dest_arst  (ap_rst_n_i)
 );
+`endif
 
 xpm_cdc_async_rst reset_sync_1 (
     .src_arst   (ap_rst_n_core),
@@ -257,12 +273,17 @@ xpm_cdc_single  aurora_status_sync_5 (
     .dest_out   (mmcm_not_locked_out_sync)
 );
 
+`ifndef HW_EMU
 xpm_cdc_single  aurora_status_sync_6 (
     .src_in     (gt_pll_lock_i),
     .src_clk    (init_clk),
     .dest_clk   (ap_clk),
     .dest_out   (gt_pll_lock_sync)
 );
+`else
+// gt_pll_lock_u from stub is already in user_clk domain (= ap_clk)
+assign gt_pll_lock_sync = gt_pll_lock_u;
+`endif
 
 assign aurora_status = {
     channel_up_sync,
@@ -313,6 +334,7 @@ assign fifo_status = {
     fifo_tx_prog_empty_sync
 };
 
+`ifndef HW_EMU
 aurora_64b66b_0 aurora_64b66b_0_0 (
   .rxp                          (gt_rxp_in),                // input wire [0 : 3] rxp
   .rxn                          (gt_rxn_in),                // input wire [0 : 3] rxn
@@ -389,6 +411,43 @@ aurora_64b66b_0 aurora_64b66b_0_0 (
   .gt_refclk1_out               (),                         // output wire gt_refclk1_out
   .gt_powergood                 (gt_powergood_u)            // output wire [3 : 0] gt_powergood
 );
+`else
+aurora_flow_gt_stub #(
+    .INSTANCE(@@@instance@@@),
+    .PIPE_ID(@@@instance@@@)
+) aurora_flow_gt_stub_0 (
+    .ap_clk                       (ap_clk),
+    .reset                        (!ap_rst_n_core),
+    .hard_err                     (hard_err_u),
+    .soft_err                     (soft_err_u),
+    .channel_up                   (channel_up_u),
+    .lane_up                      (line_up_u),
+`ifdef USE_FRAMING
+    .crc_pass_fail_n              (crc_pass_fail_n_u),
+    .crc_valid                    (crc_valid_u),
+`endif
+    .gt_pll_lock                  (gt_pll_lock_u),
+    .s_axi_tx_tdata               (s_axi_tx_tdata_u),
+`ifdef USE_FRAMING
+    .s_axi_tx_tkeep               (s_axi_tx_tkeep_u),
+    .s_axi_tx_tlast               (s_axi_tx_tlast_u),
+`endif
+    .s_axi_tx_tvalid              (s_axi_tx_tvalid_u),
+    .s_axi_tx_tready              (s_axi_tx_tready_u),
+    .s_axi_nfc_tdata              (s_axi_nfc_tdata_u),
+    .s_axi_nfc_tready             (s_axi_nfc_tready_u),
+    .s_axi_nfc_tvalid             (s_axi_nfc_tvalid_u),
+    .m_axi_rx_tdata               (m_axi_rx_tdata_u),
+`ifdef USE_FRAMING
+    .m_axi_rx_tkeep               (m_axi_rx_tkeep_u),
+    .m_axi_rx_tlast               (m_axi_rx_tlast_u),
+`endif
+    .m_axi_rx_tvalid              (m_axi_rx_tvalid_u),
+    .mmcm_not_locked_out          (mmcm_not_locked_out_u),
+    .user_clk_out                 (user_clk),
+    .gt_powergood                 (gt_powergood_u)
+);
+`endif
 
 aurora_flow_io aurora_flow_io_0 (
     .ap_clk                 (ap_clk),
@@ -419,7 +478,7 @@ aurora_flow_io aurora_flow_io_0 (
     .s_axi_tx_tvalid_u      (s_axi_tx_tvalid_u),
     .s_axi_tx_tready_u      (s_axi_tx_tready_u),
 `ifdef USE_FRAMING
-    .s_axi_tx_tlast_u       (s_axi_tx_tlast_u), 
+    .s_axi_tx_tlast_u       (s_axi_tx_tlast_u),
     .s_axi_tx_tkeep_u       (s_axi_tx_tkeep_u),
 `endif
     .fifo_rx_almost_full_u  (fifo_rx_almost_full_u),
@@ -432,6 +491,7 @@ aurora_flow_io aurora_flow_io_0 (
     .fifo_tx_prog_empty_u   (fifo_tx_prog_empty_u)
 );
 
+`ifndef HW_EMU
 xpm_cdc_single  aurora_monitor_sync_0 (
     .src_in     (gt_pll_lock_i),
     .src_clk    (init_clk),
@@ -445,6 +505,15 @@ xpm_cdc_single  aurora_monitor_sync_1 (
     .dest_clk   (user_clk),
     .dest_out   (reset_pb_u)
 );
+`else
+// reset_pb_u: sync reset_pb_i (constant 0) into user_clk domain
+xpm_cdc_single  aurora_monitor_sync_1 (
+    .src_in     (reset_pb_i),
+    .src_clk    (ap_clk),
+    .dest_clk   (user_clk),
+    .dest_out   (reset_pb_u)
+);
+`endif
 
 assign aurora_status_u = {
     channel_up_u,
@@ -652,7 +721,7 @@ xpm_cdc_array_single #(.WIDTH(32)) frames_with_errors_sync (
 
 
 wire [31:0] nfc_full_trigger_count_u;
-wire [31:0] nfc_empty_trigger_count_u; 
+wire [31:0] nfc_empty_trigger_count_u;
 wire [31:0] nfc_latency_count_u;
 
 aurora_flow_nfc aurora_flow_nfc_0 (
