@@ -8,8 +8,9 @@ stages:
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
   ACCOUNT: "hpc-prf-cifi"
-  SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -t 00:30:00 -n 4 --mem 16g"
-  SYNTH_SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -q fpgasynthesis -t 4:00:00 -n 1 --mem 64g --cpus-per-task=64"
+  SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -t 00:30:00 -n 1 --cpus-per-task=4 --mem 16g"
+  HW_EMU_SYNTH_SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -q fpgasynthesis -t 1:00:00 -n 1 --mem 16g --cpus-per-task=16"
+  HW_SYNTH_SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -q fpgasynthesis -t 4:00:00 -n 1 --mem 64g --cpus-per-task=64"
   SHORT_RUN_SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p fpga -t 00:30:00 -N 1 -n 6"
   LONG_RUN_SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p fpga -t 01:30:00 -N 1 -n 6"
 
@@ -46,28 +47,35 @@ build:sw_emu:
   parallel:
     matrix:
       - WIDTH: ["32", "64"]
+        XRT: ["2.14", "2.15", "2.16"]
   script:
+    - ml fpga/xilinx/xrt/$XRT
     - make TARGET=sw_emu FIFO_WIDTH=$WIDTH xclbin
-    - mkdir -p build/sw_emu
-    - cp aurora_flow_test_sw_emu.xclbin build/sw_emu/aurora_flow_test_sw_emu_${WIDTH}.xclbin
+    - mkdir -p build/sw_emu/xrt${XRT}
+    - cp aurora_flow_test_sw_emu.xclbin build/sw_emu/xrt${XRT}/aurora_flow_test_sw_emu_${WIDTH}.xclbin
   artifacts:
     paths:
-      - build/sw_emu/aurora_flow_test_sw_emu_${WIDTH}.xclbin
+      - build/sw_emu/xrt${XRT}/aurora_flow_test_sw_emu_${WIDTH}.xclbin
       - emconfig.json
   needs: []
 
 build:hw_emu:
   stage: build
+  variables:
+    SCHEDULER_PARAMETERS: $HW_EMU_SYNTH_SCHEDULER_PARAMETERS
   parallel:
     matrix:
       - WIDTH: ["32", "64"]
+        XRT: ["2.14", "2.15", "2.16"]
   script:
+    - ml fpga/xilinx/xrt/$XRT
     - make TARGET=hw_emu FIFO_WIDTH=$WIDTH xclbin
-    - mkdir -p build/hw_emu
-    - cp aurora_flow_test_hw_emu.xclbin build/hw_emu/aurora_flow_test_hw_emu_${WIDTH}.xclbin
+    - mkdir -p build/hw_emu/xrt${XRT}
+    - cp aurora_flow_test_hw_emu.xclbin build/hw_emu/xrt${XRT}/aurora_flow_test_hw_emu_${WIDTH}.xclbin
   artifacts:
     paths:
-      - build/hw_emu/aurora_flow_test_hw_emu_${WIDTH}.xclbin
+      - build/hw_emu/xrt${XRT}/aurora_flow_test_hw_emu_${WIDTH}.xclbin
+      - emconfig.json
   needs: []
 
 # ============================================================
@@ -86,7 +94,7 @@ test:sw_emu:
   script:
     - ml fpga/xilinx/xrt/$XRT
     - cp build/xrt${XRT}/host_aurora_flow_test .
-    - cp build/sw_emu/aurora_flow_test_sw_emu_${WIDTH}.xclbin aurora_flow_test_sw_emu.xclbin
+    - cp build/sw_emu/xrt${XRT}/aurora_flow_test_sw_emu_${WIDTH}.xclbin aurora_flow_test_sw_emu.xclbin
     - ./scripts/run_${TOPOLOGY}_emu.sh sw_emu 3 -r 2 -i 10
   needs:
     - build:sw_emu
@@ -104,17 +112,36 @@ test:hw_emu:
   script:
     - ml fpga/xilinx/xrt/$XRT
     - cp build/xrt${XRT}/host_aurora_flow_test .
-    - cp build/hw_emu/aurora_flow_test_hw_emu_${WIDTH}.xclbin aurora_flow_test_hw_emu.xclbin
+    - cp build/hw_emu/xrt${XRT}/aurora_flow_test_hw_emu_${WIDTH}.xclbin aurora_flow_test_hw_emu.xclbin
     - ./scripts/run_${TOPOLOGY}_emu.sh hw_emu 3 -r 2 -i 2 -b 256
   after_script:
     - rm -rf .hw_emu_rank_*
   needs:
     - build:hw_emu
     - build:host
-    - build:sw_emu
     - test:sw_emu
 
-tb:nfc:
+test:hw_emu:nfc_test:
+  stage: test
+  variables:
+    SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -t 02:00:00 -n 3 --mem 16g"
+  parallel:
+    matrix:
+      - WIDTH: ["32", "64"]
+        XRT: ["2.14", "2.15", "2.16"]
+  script:
+    - ml fpga/xilinx/xrt/$XRT
+    - cp build/xrt${XRT}/host_aurora_flow_test .
+    - cp build/hw_emu/xrt${XRT}/aurora_flow_test_hw_emu_${WIDTH}.xclbin aurora_flow_test_hw_emu.xclbin
+    - ./scripts/run_pair_emu.sh hw_emu 3 -r 1 -i 1 -b 65536 -n
+  after_script:
+    - rm -rf .hw_emu_rank_*
+  needs:
+    - build:hw_emu
+    - build:host
+    - test:hw_emu
+
+test:nfc_module:
   stage: test
   script:
     - make run_nfc_tb
@@ -129,7 +156,7 @@ tb:nfc:
       - nfc_tb.vcd
       - nfc_tb.wdb
 
-tb:monitor:
+test:monitor_module:
   stage: test
   script:
     - make run_monitor_tb
@@ -144,7 +171,7 @@ tb:monitor:
       - monitor_tb.vcd
       - monitor_tb.wdb
 
-tb:configuration:
+test:configuration_module:
   stage: test
   script:
     - make run_configuration_tb
@@ -166,7 +193,7 @@ tb:configuration:
 synth:
   stage: synth
   variables:
-    SCHEDULER_PARAMETERS: $SYNTH_SCHEDULER_PARAMETERS
+    SCHEDULER_PARAMETERS: $HW_SYNTH_SCHEDULER_PARAMETERS
   parallel:
     matrix:
       - FRAMING: ["0", "1"]
@@ -184,9 +211,9 @@ synth:
   needs:
     - test:sw_emu
     - test:hw_emu
-    - tb:nfc
-    - tb:monitor
-    - tb:configuration
+    - test:nfc_module
+    - test:monitor_module
+    - test:configuration_module
 
 # ============================================================
 # Run stage (HW tests)
