@@ -32,9 +32,13 @@ public:
     std::vector<std::vector<uint32_t>> frames_received;
     std::vector<std::vector<uint32_t>> frames_with_errors;
 
-    bool emulation;
+    ExecutionMode execution_mode;
 
-    Results(Configuration &config, std::vector<AuroraFlow> &auroras, bool emulation, std::vector<std::string> device_bdfs) : config(config), auroras(auroras), device_bdfs(device_bdfs), emulation(emulation)
+    bool has_counters() const { return execution_mode != ExecutionMode::sw_emu; }
+    bool has_timing() const { return execution_mode == ExecutionMode::hw; }
+    bool has_gt_counters() const { return execution_mode == ExecutionMode::hw; }
+
+    Results(Configuration &config, std::vector<AuroraFlow> &auroras, std::vector<std::string> device_bdfs) : config(config), auroras(auroras), device_bdfs(device_bdfs), execution_mode(config.execution_mode)
     {
         transmission_times.resize(config.num_instances);
         failed_transmissions.resize(config.num_instances);
@@ -98,8 +102,8 @@ public:
 
             channel_down_count[i].resize(config.repetitions);
        }
-       if (!emulation) {
-            aurora_config.resize(config.num_instances); 
+       if (has_counters()) {
+            aurora_config.resize(config.num_instances);
             for (uint32_t i = 0; i < config.num_instances; i++) {
                 aurora_config[i] = auroras[i].get_configuration();
                 auroras[i].reset_counter();
@@ -109,7 +113,7 @@ public:
 
     void update_counter(uint32_t instance, uint32_t repetition)
     {
-        if (!emulation) {
+        if (has_counters()) {
             fifo_rx_overflow_count[instance][repetition] = auroras[instance].get_fifo_rx_overflow_count();
             fifo_tx_overflow_count[instance][repetition] = auroras[instance].get_fifo_tx_overflow_count();
             nfc_full_trigger_count[instance][repetition] = auroras[instance].get_nfc_full_trigger_count();
@@ -216,10 +220,12 @@ public:
     void print_results()
     {
         std::cout << std::setw(36) << "Config" << std::setw(25) << "|";
-        if (!emulation) {
+        if (has_timing()) {
             std::cout << std::setw(24) << "Latency (s)" << std::setw(12) << "|"
-                      << std::setw(27) << "Throughput (Gbit/s)" << std::setw(9) << "|"
-                      << std::setw(27) << "Counts per iteration" << std::setw(9) << "|"
+                      << std::setw(27) << "Throughput (Gbit/s)" << std::setw(9) << "|";
+        }
+        if (has_counters()) {
+            std::cout << std::setw(27) << "Counts per iteration" << std::setw(9) << "|"
                       << std::setw(24) << "Flow Control";
         }
         std::cout << std::endl
@@ -228,21 +234,24 @@ public:
                   << std::setw(12) << "Iterations"
                   << std::setw(12) << "Frame Size"
                   << std::setw(12) << "Bytes";
-        if (!emulation) {
+        if (has_timing()) {
             std::cout << "|" << std::setw(11) << "Min."
                       << std::setw(12) << "Avg."
                       << std::setw(12) << "Max."
                       << "|" << std::setw(11) << "Min."
                       << std::setw(12) << "Avg."
-                      << std::setw(12) << "Max."
-                      << "|" << std::setw(11) << "TX"
+                      << std::setw(12) << "Max.";
+        }
+        if (has_counters()) {
+            std::cout << "|" << std::setw(11) << "TX"
                       << std::setw(12) << "RX"
                       << std::setw(12) << "Frames"
                       << "|" << std::setw(11) << "Triggered"
                       << std::setw(12) << "Latency"
                       << std::setw(12) << "TX Stalls";
         }
-        std::cout << std::endl << std::setw(emulation ? 60 : 204) << std::setfill('-') << "-"
+        int table_width = 60 + (has_timing() ? 72 : 0) + (has_counters() ? 72 : 0);
+        std::cout << std::endl << std::setw(table_width) << std::setfill('-') << "-"
                   << std::endl << std::setfill(' ');
         for (uint32_t r = 0; r < config.repetitions; r++) {
             double latency_min = std::numeric_limits<double>::infinity();
@@ -256,23 +265,22 @@ public:
             uint64_t nfc_full_triggered_sum = 0;
             uint64_t nfc_max_latency = 0;
             uint64_t fifo_tx_stalls_sum = 0;
-            if (!emulation) {
+            if (has_timing()) {
                 for (uint32_t i = 0; i < config.num_instances; i++) {
                     double latency = transmission_times[i][r] / config.iterations_per_message[r];
                     latency_sum += latency;
-                    if (latency < latency_min) {
-                        latency_min = latency;
-                    }
-                    if (latency > latency_max) {
-                        latency_max = latency;
-                    }
-
+                    if (latency < latency_min) latency_min = latency;
+                    if (latency > latency_max) latency_max = latency;
+                }
+            }
+            if (has_counters()) {
+                for (uint32_t i = 0; i < config.num_instances; i++) {
                     tx_count_sum += tx_count[i][r];
                     rx_count_sum += rx_count[i][r];
                     frame_count_sum += frames_received[i][r];
                     nfc_full_triggered_sum += nfc_full_trigger_count[i][r];
                     if (nfc_latency_count[i][r] > nfc_max_latency) {
-                        nfc_max_latency = nfc_latency_count[i][r]; 
+                        nfc_max_latency = nfc_latency_count[i][r];
                     }
                     fifo_tx_stalls_sum += fifo_tx_overflow_count[i][r];
                 }
@@ -283,14 +291,16 @@ public:
                       << std::setw(12) << config.iterations_per_message[r]
                       << std::setw(12) << config.frame_sizes[r]
                       << std::setw(12) << config.message_sizes[r];
-            if (!emulation) {
+            if (has_timing()) {
                 std::cout << std::setw(12) << latency_min
                           << std::setw(12) << latency_avg
                           << std::setw(12) << latency_max
                           << std::setw(12) << gigabits_per_iteration / latency_max
                           << std::setw(12) << gigabits_per_iteration / latency_avg
-                          << std::setw(12) << gigabits_per_iteration / latency_min
-                          << std::setw(12) << tx_count_sum / config.iterations_per_message[r] / config.num_instances
+                          << std::setw(12) << gigabits_per_iteration / latency_min;
+            }
+            if (has_counters()) {
+                std::cout << std::setw(12) << tx_count_sum / config.iterations_per_message[r] / config.num_instances
                           << std::setw(12) << rx_count_sum / config.iterations_per_message[r] / config.num_instances
                           << std::setw(12) << frame_count_sum / config.iterations_per_message[r] / config.num_instances
                           << std::setw(12) << nfc_full_triggered_sum
@@ -307,11 +317,13 @@ public:
                   << std::setw(12) << "Repetition"
                   << std::setw(12) << "Failed"
                   << std::setw(12) << "Bytes";
-        if (!emulation) {
+        if (has_counters()) {
             std::cout << std::setw(12) << "Frames"
                       << std::setw(12) << "FIFO RX"
-                      << std::setw(12) << "NFC"
-                      << std::setw(12) << "GT 0"
+                      << std::setw(12) << "NFC";
+        }
+        if (has_gt_counters()) {
+            std::cout << std::setw(12) << "GT 0"
                       << std::setw(12) << "GT 1"
                       << std::setw(12) << "GT 2"
                       << std::setw(12) << "GT 3"
@@ -325,7 +337,8 @@ public:
                       << std::setw(12) << "Soft err"
                       << std::setw(12) << "Channel";
         }
-        std::cout << std::endl << std::setw(emulation ? 36 : 240) << std::setfill('-') << "-"
+        int err_width = 36 + (has_counters() ? 36 : 0) + (has_gt_counters() ? 156 : 0);
+        std::cout << std::endl << std::setw(err_width) << std::setfill('-') << "-"
                   << std::endl << std::setfill(' ');
 
         for (uint32_t r = 0; r < config.repetitions; r++) {
@@ -353,7 +366,7 @@ public:
                     failed_transmissions_sum++;
                 }
                 byte_errors_sum += errors[i][r];
-                if (!emulation) {
+                if (has_counters()) {
                     frame_errors_sum += frames_with_errors[i][r];
                     fifo_rx_errors_sum += fifo_rx_overflow_count[i][r];
                     nfc_full_trigger_sum += nfc_full_trigger_count[i][r];
@@ -376,11 +389,13 @@ public:
             std::cout << std::setw(12) << r
                       << std::setw(12) << failed_transmissions_sum
                       << std::setw(12) << byte_errors_sum;
-            if (!emulation) {
+            if (has_counters()) {
                 std::cout << std::setw(12) << frame_errors_sum
                           << std::setw(12) << fifo_rx_errors_sum
-                          << std::setw(12) << nfc_full_trigger_sum - nfc_empty_trigger_sum
-                          << std::setw(12) << gt_not_ready_0_sum
+                          << std::setw(12) << nfc_full_trigger_sum - nfc_empty_trigger_sum;
+            }
+            if (has_gt_counters()) {
+                std::cout << std::setw(12) << gt_not_ready_0_sum
                           << std::setw(12) << gt_not_ready_1_sum
                           << std::setw(12) << gt_not_ready_2_sum
                           << std::setw(12) << gt_not_ready_3_sum
@@ -421,7 +436,7 @@ public:
 
     void write()
     {
-        if (emulation) {
+        if (execution_mode != ExecutionMode::hw) {
             return;
         }
         char* hostname;

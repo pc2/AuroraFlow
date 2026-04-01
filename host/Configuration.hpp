@@ -10,9 +10,12 @@
 
 #include <cxxopts.hpp>
 
+enum class ExecutionMode { hw, hw_emu, sw_emu };
+
 class Configuration
 {
 public:
+    ExecutionMode execution_mode = ExecutionMode::hw;
     uint32_t device_id;
     uint32_t num_instances = 6;
     std::string xclbin_path;
