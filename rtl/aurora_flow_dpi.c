@@ -28,41 +28,38 @@
 static int tx_fds[MAX_INSTANCES] = {-1, -1};
 static int rx_fds[MAX_INSTANCES] = {-1, -1};
 
-void aurora_dpi_open(int instance, int pipe_id) {
-    if (instance < 0 || instance >= MAX_INSTANCES) {
-        printf("aurora_dpi: invalid instance %d\n", instance);
-        fflush(stdout);
-        return;
-    }
-
+void aurora_dpi_open_all() {
     char path[256];
     const char *dir = getenv("AURORA_PIPE_DIR");
     if (!dir) dir = ".";
-
     const char *offset_str = getenv("AURORA_PIPE_ID_OFFSET");
     int offset = offset_str ? atoi(offset_str) : 0;
-    int global_pipe_id = pipe_id + offset;
 
-    printf("aurora_dpi[%d]: pipe_dir=%s pipe_id=%d (offset=%d)\n", instance, dir, global_pipe_id, offset);
-    fflush(stdout);
-
-    snprintf(path, sizeof(path), "%s/aurora_%d_rx", dir, global_pipe_id);
-    rx_fds[instance] = open(path, O_RDONLY | O_NONBLOCK);
-    printf("aurora_dpi[%d]: open RX %s = %d %s\n", instance, path,
-           rx_fds[instance], rx_fds[instance] < 0 ? strerror(errno) : "ok");
-    fflush(stdout);
-
-    snprintf(path, sizeof(path), "%s/aurora_%d_tx", dir, global_pipe_id);
-    int retries = 0;
-    tx_fds[instance] = open(path, O_WRONLY | O_NONBLOCK);
-    while (tx_fds[instance] < 0 && errno == ENXIO && retries < 5000) {
-        usleep(1000);
-        tx_fds[instance] = open(path, O_WRONLY | O_NONBLOCK);
-        retries++;
+    // Phase 1: open all RX fds (O_RDONLY|O_NONBLOCK succeeds immediately)
+    for (int i = 0; i < MAX_INSTANCES; i++) {
+        int gid = i + offset;
+        snprintf(path, sizeof(path), "%s/aurora_%d_rx", dir, gid);
+        rx_fds[i] = open(path, O_RDONLY | O_NONBLOCK);
+        printf("aurora_dpi[%d]: open RX %s = %d %s\n", i, path,
+               rx_fds[i], rx_fds[i] < 0 ? strerror(errno) : "ok");
+        fflush(stdout);
     }
-    printf("aurora_dpi[%d]: open TX %s = %d %s (retries=%d)\n", instance, path,
-           tx_fds[instance], tx_fds[instance] < 0 ? strerror(errno) : "ok", retries);
-    fflush(stdout);
+
+    // Phase 2: open all TX fds (readers now exist from phase 1)
+    for (int i = 0; i < MAX_INSTANCES; i++) {
+        int gid = i + offset;
+        snprintf(path, sizeof(path), "%s/aurora_%d_tx", dir, gid);
+        int retries = 0;
+        tx_fds[i] = open(path, O_WRONLY | O_NONBLOCK);
+        while (tx_fds[i] < 0 && errno == ENXIO && retries < 10000) {
+            usleep(1000);
+            tx_fds[i] = open(path, O_WRONLY | O_NONBLOCK);
+            retries++;
+        }
+        printf("aurora_dpi[%d]: open TX %s = %d %s (retries=%d)\n", i, path,
+               tx_fds[i], tx_fds[i] < 0 ? strerror(errno) : "ok", retries);
+        fflush(stdout);
+    }
 }
 
 int aurora_dpi_write(int instance, const svBitVecVal *data) {

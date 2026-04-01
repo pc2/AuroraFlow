@@ -60,7 +60,7 @@ module aurora_flow_gt_stub #(
     output wire         user_clk_out
 );
 
-    import "DPI-C" function void aurora_dpi_open(input int inst, input int pipe_id);
+    import "DPI-C" function void aurora_dpi_open_all();
     import "DPI-C" function int  aurora_dpi_write(input int inst, input bit [255:0] data);
     import "DPI-C" function int  aurora_dpi_read(input int inst, output bit [255:0] data);
     import "DPI-C" function void aurora_dpi_close(input int inst);
@@ -103,13 +103,14 @@ module aurora_flow_gt_stub #(
         end
     end
 
-    // Pipe lifecycle: open after first reset deasserts, close on subsequent reset
+    // Pipe lifecycle: instance 0 opens all pipes, close on reset
     reg pipes_open = 0;
 
     initial begin
-        // Wait for reset to deassert, then open pipes
         @(negedge reset);
-        aurora_dpi_open(INSTANCE, PIPE_ID);
+        if (INSTANCE == 0) begin
+            aurora_dpi_open_all();
+        end
         pipes_open = 1;
     end
 
