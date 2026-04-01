@@ -90,7 +90,9 @@ int main(int argc, char *argv[])
     config.rank = rank;
     config.world_size = world_size;
 
-    bool emulation = (std::getenv("XCL_EMULATION_MODE") != nullptr);
+    const char *emu_mode = std::getenv("XCL_EMULATION_MODE");
+    bool emulation = (emu_mode != nullptr);
+    bool sw_emu = (emu_mode != nullptr && std::string(emu_mode) == "sw_emu");
 
     if (emulation) {
         config.num_instances = 2;
@@ -167,7 +169,7 @@ int main(int argc, char *argv[])
         recv_kernels[i] = RecvKernel(i % 2, devices[i / 2], xclbin_uuids[i / 2], config);
     }
 
-    Results results(config, auroras, emulation, device_bdfs);
+    Results results(config, auroras, sw_emu, device_bdfs);
 
     MPI_Barrier(MPI_COMM_WORLD);
 

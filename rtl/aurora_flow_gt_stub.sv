@@ -103,16 +103,20 @@ module aurora_flow_gt_stub #(
         end
     end
 
-    // Open pipes at simulation start
+    // Pipe lifecycle: open after first reset deasserts, close on subsequent reset
+    reg pipes_open = 0;
+
     initial begin
+        // Wait for reset to deassert, then open pipes
+        @(negedge reset);
         aurora_dpi_open(INSTANCE, PIPE_ID);
+        pipes_open = 1;
     end
 
     // TX: write to pipe when valid and pipe accepts
     bit [255:0] tx_data_swapped;
     always @(posedge ap_clk) begin
-        if (!reset && s_axi_tx_tvalid) begin
-            // Aurora uses big-endian bit ordering [0:255], DPI expects [255:0]
+        if (!reset && pipes_open && s_axi_tx_tvalid) begin
             tx_data_swapped = s_axi_tx_tdata;
             s_axi_tx_tready <= aurora_dpi_write(INSTANCE, tx_data_swapped);
         end else begin
@@ -120,11 +124,15 @@ module aurora_flow_gt_stub #(
         end
     end
 
-    // RX: read from pipe when NFC allows
+    // RX: read from pipe when NFC allows and pipes are open
     bit [255:0] rx_data;
     always @(posedge ap_clk) begin
-        if (reset) begin
+        if (reset || !pipes_open) begin
             m_axi_rx_tvalid <= 1'b0;
+            if (reset && pipes_open) begin
+                aurora_dpi_close(INSTANCE);
+                pipes_open <= 0;
+            end
         end else if (!nfc_stop) begin
             if (aurora_dpi_read(INSTANCE, rx_data)) begin
                 m_axi_rx_tdata <= rx_data;
@@ -139,11 +147,6 @@ module aurora_flow_gt_stub #(
         end else begin
             m_axi_rx_tvalid <= 1'b0;
         end
-    end
-
-    // Close pipes at simulation end
-    final begin
-        aurora_dpi_close(INSTANCE);
     end
 
 endmodule

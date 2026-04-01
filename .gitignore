@@ -12,6 +12,7 @@ aurora_flow_*1_project*
 rtl/aurora_flow_0.v
 rtl/aurora_flow_1.v
 rtl/aurora_flow_define.v
+rtl/hw_emu
 *.xo
 *.xclbin
 *.xclbin.info

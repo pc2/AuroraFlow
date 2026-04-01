@@ -170,12 +170,14 @@ public:
 
     void shutdown()
     {
-        if (!is_sw_emu) return;
-        unsigned int one = 1;
-        control_bo.write(&one);
-        control_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
-        file_link_run.wait(std::chrono::milliseconds(5000));
-        is_sw_emu = false;
+        if (is_sw_emu) {
+            unsigned int one = 1;
+            control_bo.write(&one);
+            control_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+            file_link_run.wait(std::chrono::milliseconds(5000));
+        } else if (is_emulation) {
+            reset_core();
+        }
     }
 
     // Configuration

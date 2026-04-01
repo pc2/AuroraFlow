@@ -224,7 +224,7 @@ public:
         }
         std::cout << std::endl
                   << std::setw(12) << "Repetition"
-                  << std::setw(12) << "Ranks"
+                  << std::setw(12) << "Instances"
                   << std::setw(12) << "Iterations"
                   << std::setw(12) << "Frame Size"
                   << std::setw(12) << "Bytes";
