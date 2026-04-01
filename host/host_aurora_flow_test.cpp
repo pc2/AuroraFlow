@@ -129,8 +129,7 @@ int main(int argc, char *argv[])
 
     std::vector<bool> statuses(config.num_instances);
     for (uint32_t i = 0; i < config.num_instances; i++) {
-        auroras[i] = AuroraFlow(i % 2, devices[i / 2], xclbin_uuids[i / 2],
-                            emulation ? config.instances[i] : UINT32_MAX);
+        auroras[i] = AuroraFlow(i % 2, devices[i / 2], xclbin_uuids[i / 2]);
         statuses[i] = auroras[i].core_status_ok(3000);
         if (!statuses[i]) {
             std::cout << "problem with core " << i % 2

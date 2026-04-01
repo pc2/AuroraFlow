@@ -119,14 +119,16 @@ public:
     AuroraFlow(std::string name, xrt::device &device, xrt::uuid &xclbin_uuid)
         : AuroraFlow(xrt::ip(device, xclbin_uuid, name)) {}
 
-    AuroraFlow(uint32_t instance, xrt::device &device, xrt::uuid &xclbin_uuid,
-           uint32_t pipe_id = UINT32_MAX)
+    AuroraFlow(uint32_t instance, xrt::device &device, xrt::uuid &xclbin_uuid)
     {
         const char *emu_mode = std::getenv("XCL_EMULATION_MODE");
         is_sw_emu = (emu_mode != nullptr && std::string(emu_mode) == "sw_emu");
         bool hw_emu = (emu_mode != nullptr && std::string(emu_mode) == "hw_emu");
         is_emulation = is_sw_emu || hw_emu;
-        emu_instance = (pipe_id != UINT32_MAX) ? pipe_id : instance;
+        instance_id = instance;
+        const char *rank_str = std::getenv("OMPI_COMM_WORLD_RANK");
+        if (!rank_str) rank_str = std::getenv("PMIX_RANK");
+        rank_id = rank_str ? std::atoi(rank_str) : 0;
 
         if (is_sw_emu) {
             char name[100];
@@ -139,7 +141,7 @@ public:
             control_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 
             file_link_run = xrt::run(file_link_kernel);
-            file_link_run.set_arg(2, emu_instance);
+            file_link_run.set_arg(2, instance_id);
             file_link_run.set_arg(3, control_bo);
             file_link_run.start();
 
@@ -283,30 +285,30 @@ public:
     {
         if (is_emulation) {
             const char *pipe_dir = std::getenv("AURORA_PIPE_DIR");
-            if (!pipe_dir) pipe_dir = "/tmp";
+            if (!pipe_dir) pipe_dir = ".";
 
             bool ok = true;
             for (const char *suffix : {"tx", "rx"}) {
                 char pipe_path[256];
-                snprintf(pipe_path, sizeof(pipe_path), "%s/aurora_%u_%s", pipe_dir, emu_instance, suffix);
+                snprintf(pipe_path, sizeof(pipe_path), "%s/aurora_r%d_i%u_%s", pipe_dir, rank_id, instance_id, suffix);
                 struct stat lst, st;
                 if (lstat(pipe_path, &lst) != 0) {
-                    std::cerr << "Aurora[" << emu_instance << "]: " << pipe_path
+                    std::cerr << "Aurora[r" << rank_id << "_i" << instance_id << "]: " << pipe_path
                               << " not found: " << strerror(errno) << std::endl;
                     ok = false;
                 } else if (S_ISLNK(lst.st_mode)) {
                     if (stat(pipe_path, &st) == 0 && S_ISFIFO(st.st_mode)) {
                         char target[256] = {};
                         readlink(pipe_path, target, sizeof(target) - 1);
-                        std::cout << "Aurora[" << emu_instance << "]: " << pipe_path
+                        std::cout << "Aurora[r" << rank_id << "_i" << instance_id << "]: " << pipe_path
                                   << " -> " << target << std::endl;
                     } else {
-                        std::cerr << "Aurora[" << emu_instance << "]: " << pipe_path
+                        std::cerr << "Aurora[r" << rank_id << "_i" << instance_id << "]: " << pipe_path
                                   << " is a symlink but target is not a FIFO" << std::endl;
                         ok = false;
                     }
                 } else if (!S_ISFIFO(lst.st_mode)) {
-                    std::cerr << "Aurora[" << emu_instance << "]: " << pipe_path
+                    std::cerr << "Aurora[r" << rank_id << "_i" << instance_id << "]: " << pipe_path
                               << " exists but is not a FIFO" << std::endl;
                     ok = false;
                 }
@@ -545,8 +547,11 @@ public:
         ip.write_register(COUNTER_RESET_ADDRESS, false);
     }
 
-    // Configuration
+    // Identification
+    uint32_t instance_id = 0;
+    int rank_id = 0;
 
+    // Configuration
     bool has_tkeep;
     bool has_tlast;
     uint16_t fifo_width;
@@ -561,7 +566,6 @@ private:
     xrt::kernel file_link_kernel;
     xrt::run file_link_run;
     xrt::bo control_bo;
-    uint32_t emu_instance = 0;
     bool is_emulation = false;
     bool is_sw_emu = false;
 
@@ -605,7 +609,8 @@ private:
         ins_loss_nyq = other.ins_loss_nyq;
         fifo_prog_full_threshold = other.fifo_prog_full_threshold;
         fifo_prog_empty_threshold = other.fifo_prog_empty_threshold;
-        emu_instance = other.emu_instance;
+        instance_id = other.instance_id;
+        rank_id = other.rank_id;
         is_emulation = std::exchange(other.is_emulation, false);
         is_sw_emu = std::exchange(other.is_sw_emu, false);
     }

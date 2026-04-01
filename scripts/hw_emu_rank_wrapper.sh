@@ -11,7 +11,5 @@ ln -sf "$BASE_DIR"/aurora_flow_test_hw_emu.xclbin "$RANK_DIR"/
 ln -sf "$BASE_DIR"/emconfig.json "$RANK_DIR"/
 ln -sf "$BASE_DIR"/host_aurora_flow_test "$RANK_DIR"/
 
-export AURORA_PIPE_ID_OFFSET=$((RANK * 2))
-
 cd "$RANK_DIR"
 exec ./host_aurora_flow_test "$@"

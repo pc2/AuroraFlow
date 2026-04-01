@@ -28,27 +28,30 @@
 static int tx_fds[MAX_INSTANCES] = {-1, -1};
 static int rx_fds[MAX_INSTANCES] = {-1, -1};
 
+static int get_rank() {
+    const char *rank_str = getenv("OMPI_COMM_WORLD_RANK");
+    if (!rank_str) rank_str = getenv("PMIX_RANK");
+    return rank_str ? atoi(rank_str) : 0;
+}
+
 void aurora_dpi_open_all() {
     char path[256];
     const char *dir = getenv("AURORA_PIPE_DIR");
     if (!dir) dir = ".";
-    const char *offset_str = getenv("AURORA_PIPE_ID_OFFSET");
-    int offset = offset_str ? atoi(offset_str) : 0;
+    int rank = get_rank();
 
     // Phase 1: open all RX fds (O_RDONLY|O_NONBLOCK succeeds immediately)
     for (int i = 0; i < MAX_INSTANCES; i++) {
-        int gid = i + offset;
-        snprintf(path, sizeof(path), "%s/aurora_%d_rx", dir, gid);
+        snprintf(path, sizeof(path), "%s/aurora_r%d_i%d_rx", dir, rank, i);
         rx_fds[i] = open(path, O_RDONLY | O_NONBLOCK);
-        printf("aurora_dpi[%d]: open RX %s = %d %s\n", i, path,
+        printf("aurora_dpi[r%d_i%d]: open RX %s = %d %s\n", rank, i, path,
                rx_fds[i], rx_fds[i] < 0 ? strerror(errno) : "ok");
         fflush(stdout);
     }
 
     // Phase 2: open all TX fds (readers now exist from phase 1)
     for (int i = 0; i < MAX_INSTANCES; i++) {
-        int gid = i + offset;
-        snprintf(path, sizeof(path), "%s/aurora_%d_tx", dir, gid);
+        snprintf(path, sizeof(path), "%s/aurora_r%d_i%d_tx", dir, rank, i);
         int retries = 0;
         tx_fds[i] = open(path, O_WRONLY | O_NONBLOCK);
         while (tx_fds[i] < 0 && errno == ENXIO && retries < 10000) {
@@ -56,7 +59,7 @@ void aurora_dpi_open_all() {
             tx_fds[i] = open(path, O_WRONLY | O_NONBLOCK);
             retries++;
         }
-        printf("aurora_dpi[%d]: open TX %s = %d %s (retries=%d)\n", i, path,
+        printf("aurora_dpi[r%d_i%d]: open TX %s = %d %s (retries=%d)\n", rank, i, path,
                tx_fds[i], tx_fds[i] < 0 ? strerror(errno) : "ok", retries);
         fflush(stdout);
     }
