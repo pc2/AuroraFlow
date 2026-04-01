@@ -62,6 +62,14 @@ void aurora_dpi_open_all() {
         printf("aurora_dpi[r%d_i%d]: open TX %s = %d %s (retries=%d)\n", rank, i, path,
                tx_fds[i], tx_fds[i] < 0 ? strerror(errno) : "ok", retries);
         fflush(stdout);
+
+#ifdef F_SETPIPE_SZ
+        if (tx_fds[i] >= 0) {
+            int actual = fcntl(tx_fds[i], F_SETPIPE_SZ, DATA_BYTES);
+            printf("aurora_dpi[r%d_i%d]: pipe buffer %d bytes\n", rank, i, actual);
+            fflush(stdout);
+        }
+#endif
     }
 }
 
