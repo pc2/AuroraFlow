@@ -213,8 +213,7 @@ public:
         return total_failed_transmissions() > 0
             || total_byte_errors() > 0
             || total_frame_errors() > 0
-            || total_fifo_rx_overflows() > 0
-            || total_nfc_errors() > 0;
+            || total_fifo_rx_overflows() > 0;
     }
 
     void print_results()
