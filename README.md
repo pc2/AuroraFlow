@@ -278,24 +278,104 @@ The second is the so-called latency test, which tests different message sizes wi
 ### Noctua2
 
 
+## Emulation
+
+AuroraFlow supports software emulation (sw_emu) and hardware emulation (hw_emu) for testing without FPGAs.
+
+### How it works
+
+In emulation, the Aurora IP core is replaced by a drop-in substitute that uses Unix named pipes (FIFOs) for inter-FPGA communication. Each Aurora instance has a TX pipe (for sending) and an RX pipe (for receiving). The topology is defined by how these pipes are connected via symlinks.
+
+- **sw_emu**: The Aurora core is replaced by an HLS kernel (`aurora_flow_emu`) that forwards AXI-Stream data through pipes. Fast execution, tests data integrity and pipe connectivity.
+- **hw_emu**: The Aurora core is replaced by the real RTL (FIFOs, NFC, data width converters, configuration registers) with a DPI-C GT stub that uses pipes instead of the transceiver. The HLS send/recv kernels are RTL-simulated by xsim. This provides cycle-accurate FIFO and datapath behavior, functional NFC flow control (XOFF/XON triggering, FIFO thresholds), and all Aurora configuration/status registers readable from the host. The pipe-based link does not model the exact physical transceiver timing — the NFC inflight window is approximated with a fixed 256-cycle delay, and both clock domains (user_clk and ap_clk) run at the same frequency.
+
+Each emulated FPGA runs as a separate MPI rank. MPI is required to provide process isolation — each rank gets its own XRT emulation runtime, which cannot be shared within a single process. Additionally, each hw_emu rank runs in a separate working directory to avoid xsim socket and lock file conflicts. The host binary is compiled with MPI and works identically across all three execution modes (hw, hw_emu, sw_emu).
+
+### Pipe naming scheme
+
+Each pipe is identified by its MPI rank and local instance:
+
+```
+aurora_r{rank}_i{instance}_{tx|rx}
+```
+
+- `rank`: MPI rank (0, 1, 2, ...), detected from `OMPI_COMM_WORLD_RANK` or `PMIX_RANK`, defaults to 0
+- `instance`: local Aurora core (0 or 1)
+- `tx`: FIFO created with `mkfifo`, the Aurora instance writes to it
+- `rx`: symlink to another instance's `tx` pipe, the Aurora instance reads from it
+
+### Topology configuration
+
+The topology is defined entirely by how `rx` symlinks point to `tx` FIFOs. The configure scripts create the pipes and symlinks:
+
+**Loopback** (each core loops back to itself):
+```
+aurora_r0_i0_rx -> aurora_r0_i0_tx
+aurora_r0_i1_rx -> aurora_r0_i1_tx
+```
+
+**Pair** (cross-connect ch0 and ch1 within each FPGA):
+```
+aurora_r0_i0_rx -> aurora_r0_i1_tx
+aurora_r0_i1_rx -> aurora_r0_i0_tx
+```
+
+**Ring** (ch1 of rank R connects to ch0 of rank R+1, bidirectional):
+```
+aurora_r0_i0_rx -> aurora_r1_i1_tx   (rank 0 ch0 receives from rank 1 ch1)
+aurora_r0_i1_rx -> aurora_r1_i0_tx   (rank 0 ch1 receives from rank 1 ch0)
+aurora_r1_i0_rx -> aurora_r0_i1_tx   (rank 1 ch0 receives from rank 0 ch1)
+aurora_r1_i1_rx -> aurora_r0_i0_tx   (rank 1 ch1 receives from rank 0 ch0)
+```
+
+### Building
+
+```
+make TARGET=sw_emu xclbin host    # software emulation
+make TARGET=hw_emu xclbin host    # hardware emulation
+```
+
+### Running
+
+The run scripts handle pipe creation, topology configuration, and MPI launch:
+
+```
+./scripts/run_loopback_emu.sh sw_emu          # sw_emu, 2 ranks, loopback
+./scripts/run_pair_emu.sh hw_emu 3            # hw_emu, 3 ranks, pair
+./scripts/run_ring_emu.sh sw_emu 2 -r 2 -i 10  # sw_emu, 2 ranks, ring, extra args
+```
+
+Arguments: `<mode> [num_ranks] [host_args...]`
+
+For hw_emu, each MPI rank runs in an isolated working directory (`.hw_emu_rank_N/`) to prevent XRT simulation conflicts.
+
+### Flow control in hw_emu
+
+The hw_emu mode provides cycle-accurate NFC (Native Flow Control) simulation:
+
+- The pipe buffer is sized to match the in-flight data capacity of the real link
+- When the RX FIFO fills, the NFC module sends XOFF, the GT stub stops reading from the pipe
+- The pipe fills, blocking the remote sender's write
+- All NFC counters (trigger count, latency, FIFO overflow) are readable from the host
+
+Test NFC behavior with the `-n` flag (starts recv 3 seconds after send):
+
+```
+./scripts/run_pair_emu.sh hw_emu 2 -r 1 -i 1 -b 65536 -n
+```
+
+## Running on hardware
+
 There are scripts available for running on the [Noctua 2](https://pc2.uni-paderborn.de/hpc-services/available-systems/noctua2) cluster. The used set of modules can be loaded with the following command.
 
 ```
   source env.sh
 ```
 
-There are scripts available for configuring the three topologies [loopback](./scripts/configure_loopback.sh), [pair](./scripts/configure_pair.sh) and [ring](./scripts/configure_ring.sh). They also include a link to a visualisation.
+There are scripts available for configuring the three topologies [loopback](./scripts/configure_loopback_hw.sh), [pair](./scripts/configure_pair_hw.sh) and [ring](./scripts/configure_ring_hw.sh).
 
-There is one script for [simple synthesis](./scripts/synth.sh) and one for synthesing [all configurations](./scripts/synth_all.sh) with datawidth converter enabled or disabled and framing or streaming enabled. With all synthesized configurations available, you can test them with one [script](./scripts/run_over_all_configs.sh).
+For quick testing, there are three scripts which configure each topology and set the right mode parameter: [loopback](./scripts/run_loopback_hw.sh), [pair](./scripts/run_pair_hw.sh) and [ring](./scripts/run_ring_hw.sh).
 
-For quick testing, there are three scripts which configure each topology and set the right mode parameter: [loopback](./scripts/run_loopback.sh), [pair](./scripts/run_pair.sh) and [ring](./scripts/run_ring.sh).
+The scripts pass all additional parameters to the test host.
 
-The scripts are passing all parameters to the test run.
-
-There is also a helper script which runs a given script for every available FPGA node.
-
-```
-./scripts/for_every_node.sh ./scripts/run_over_all_configs.sh
-```
-
-<p align="center"><sup>Copyright&copy; 2023-2025 Gerrit Pape (papeg@mail.upb.de)</sup></p>
+<p align="center"><sup>Copyright&copy; 2023-2026 Gerrit Pape (gerrit.pape@uni-paderborn.de)</sup></p>
