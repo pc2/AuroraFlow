@@ -9,7 +9,7 @@ variables:
   GIT_SUBMODULE_STRATEGY: recursive
   ACCOUNT: "hpc-prf-cifi"
   SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -t 00:30:00 -n 1 --cpus-per-task=4 --mem 16g"
-  HW_EMU_SYNTH_SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -q fpgasynthesis -t 1:00:00 -n 1 --mem 16g --cpus-per-task=16"
+  HW_EMU_SYNTH_SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -q fpgasynthesis -t 1:00:00 -n 1 --mem 32g --cpus-per-task=32"
   HW_SYNTH_SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -q fpgasynthesis -t 4:00:00 -n 1 --mem 64g --cpus-per-task=64"
   SHORT_RUN_SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p fpga -t 00:30:00 -N 1 -n 6"
   LONG_RUN_SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p fpga -t 01:30:00 -N 1 -n 6"
