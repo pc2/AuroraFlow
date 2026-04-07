@@ -4,6 +4,7 @@ stages:
   - synth
   - run
   - benchmark
+  - collect
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
@@ -119,7 +120,6 @@ test:hw_emu:
   needs:
     - build:hw_emu
     - build:host
-    - test:sw_emu
 
 test:hw_emu:nfc_test:
   stage: test
@@ -139,7 +139,6 @@ test:hw_emu:nfc_test:
   needs:
     - build:hw_emu
     - build:host
-    - test:hw_emu
 
 test:nfc_module:
   stage: test
@@ -202,18 +201,29 @@ synth:
   script:
     - ml fpga/xilinx/xrt/$XRT
     - make xclbin USE_FRAMING=$FRAMING FIFO_WIDTH=$WIDTH
-    - cp aurora_flow_test_hw.xclbin aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin
+    - mkdir -p build/hw/xrt${XRT}
+    - cp aurora_flow_test_hw.xclbin build/hw/xrt${XRT}/aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin
   only:
     - web
   artifacts:
     paths:
-      - aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin
+      - build/hw/xrt${XRT}/aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin
   needs:
-    - test:sw_emu
-    - test:hw_emu
-    - test:nfc_module
-    - test:monitor_module
-    - test:configuration_module
+    - job: test:sw_emu
+      artifacts: false
+    - job: test:hw_emu
+      artifacts: false
+    - job: test:hw_emu:nfc_test
+      artifacts: false
+    - job: test:nfc_module
+      artifacts: false
+      optional: true
+    - job: test:monitor_module
+      artifacts: false
+      optional: true
+    - job: test:configuration_module
+      artifacts: false
+      optional: true
 
 # ============================================================
 # Run stage (HW tests)
@@ -232,6 +242,7 @@ run:hw:
   script:
     - ml fpga/xilinx/xrt/$XRT
     - cp build/xrt${XRT}/host_aurora_flow_test .
+    - cp build/hw/xrt${XRT}/aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin .
     - ./scripts/run_${TOPOLOGY}_hw.sh -p aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin
   only:
     - web
@@ -254,6 +265,7 @@ run:nfc_test:
   script:
     - ml fpga/xilinx/xrt/$XRT
     - cp build/xrt${XRT}/host_aurora_flow_test .
+    - cp build/hw/xrt${XRT}/aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin .
     - ./scripts/run_pair_hw.sh -p aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin -n -l
   only:
     - web
@@ -270,17 +282,48 @@ benchmark:
   parallel:
     matrix:
       - XRT: ["2.14", "2.15", "2.16"]
+        WIDTH: ["32", "64"]
+        FRAMING: ["0"]
+        FRAME_SIZE: ["0"]
+      - XRT: ["2.14", "2.15", "2.16"]
+        WIDTH: ["32", "64"]
+        FRAMING: ["1"]
+        FRAME_SIZE: ["4", "16", "32", "128"]
   variables:
     SCHEDULER_PARAMETERS: "${LONG_RUN_SCHEDULER_PARAMETERS} --constraint=xilinx_u280_xrt${XRT}"
   script:
     - ml fpga/xilinx/xrt/$XRT
     - cp build/xrt${XRT}/host_aurora_flow_test .
-    - ./scripts/run_over_all_configs.sh -l -i 20 -b 268435456
+    - cp build/hw/xrt${XRT}/aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin .
+    - ./scripts/configure_pair_hw.sh
+    - ./scripts/reset.sh
+    - ./host_aurora_flow_test -m 1 -p aurora_flow_test_hw_${FRAMING}_${WIDTH}.xclbin -f $FRAME_SIZE -l -i 20 -b 268435456
+    - mkdir -p results
+    - mv results.csv results/results_xrt${XRT}_w${WIDTH}_f${FRAMING}_fs${FRAME_SIZE}.csv
+  only:
+    - web
+  artifacts:
+    paths:
+      - results/results_xrt${XRT}_w${WIDTH}_f${FRAMING}_fs${FRAME_SIZE}.csv
+  dependencies:
+    - build:host
+    - synth
+
+# ============================================================
+# Collect stage
+# ============================================================
+
+benchmark:collect:
+  stage: collect
+  variables:
+    SCHEDULER_PARAMETERS: "-A ${ACCOUNT} -p normal -t 00:10:00 -n 1 --mem 4g"
+  script:
+    - cat results/*.csv > results.csv
+    - wc -l results.csv
   only:
     - web
   artifacts:
     paths:
       - results.csv
   needs:
-    - build:host
-    - run:hw
+    - benchmark
