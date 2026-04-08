@@ -1,0 +1,10 @@
+.Xil
+_x*
+*.xclbin*
+*.json
+*.xo*
+*.log
+*.out
+.hw_emu_rank*
+aurora_emu_*
+.ipcache

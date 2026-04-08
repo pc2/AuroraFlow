@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# All build artifacts (host binary, xclbin, emconfig.json) live in the test
+# build directory. cd into it so ./host_aurora_flow_test and the hw_emu rank
+# wrapper find them.
+BUILD_DIR="${BUILD_DIR:-${SCRIPT_DIR}/../build}"
+cd "$BUILD_DIR"
+
 EMU_MODE="${1:-sw_emu}"
 NUM_RANKS="${2:-2}"
 shift 2 2>/dev/null || shift $# 2>/dev/null || true
@@ -11,12 +19,12 @@ rm -rf "$AURORA_PIPE_DIR" .hw_emu_rank_* .run
 mkdir -p "$AURORA_PIPE_DIR"
 trap 'rm -rf "$AURORA_PIPE_DIR" .hw_emu_rank_* .run' EXIT
 
-./scripts/configure_ring_emu.sh $NUM_RANKS
+"${SCRIPT_DIR}/configure_pair_emu.sh" $NUM_RANKS
 
 if [ "$EMU_MODE" = "hw_emu" ]; then
     mpirun -x AURORA_PIPE_DIR -x XCL_EMULATION_MODE -n $NUM_RANKS \
-        scripts/hw_emu_rank_wrapper.sh -m 2 "$@"
+        "${SCRIPT_DIR}/hw_emu_rank_wrapper.sh" -m 1 "$@"
 else
     mpirun -x AURORA_PIPE_DIR -x XCL_EMULATION_MODE -n $NUM_RANKS \
-        ./host_aurora_flow_test -m 2 "$@"
+        ./host_aurora_flow_test -m 1 "$@"
 fi

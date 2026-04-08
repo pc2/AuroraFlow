@@ -132,10 +132,10 @@ public:
 
         if (is_sw_emu) {
             char name[100];
-            snprintf(name, 100, "aurora_flow_emu:{aurora_flow_emu_%u}", instance);
+            snprintf(name, 100, "aurora_flow_sw_emu:{aurora_flow_sw_emu_%u}", instance);
             file_link_kernel = xrt::kernel(device, xclbin_uuid, name);
 
-            control_bo = xrt::bo(device, sizeof(unsigned int), xrt::bo::flags::normal, file_link_kernel.group_id(3));
+            control_bo = xrt::bo(device, sizeof(unsigned int), file_link_kernel.group_id(3));
             unsigned int zero = 0;
             control_bo.write(&zero);
             control_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);

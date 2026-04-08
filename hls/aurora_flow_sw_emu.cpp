@@ -60,7 +60,7 @@ static bool read_full(int fd, void *buf, size_t count) {
 
 extern "C" {
 
-void aurora_flow_emu(
+void aurora_flow_sw_emu(
     hls::stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &tx_axis,
     hls::stream<ap_axiu<DATA_WIDTH, 0, 0, 0>> &rx_axis,
     unsigned int pipe_id,
@@ -92,14 +92,14 @@ void aurora_flow_emu(
     tx_opener.join();
 
     if (tx_fd < 0 || rx_fd < 0) {
-        fprintf(stderr, "aurora_file_link[%u]: pipe open failed: %s\n",
+        fprintf(stderr, "aurora_flow_sw_emu[%u]: pipe open failed: %s\n",
                 pipe_id, strerror(errno));
         if (tx_fd >= 0) close(tx_fd);
         if (rx_fd >= 0) close(rx_fd);
         return;
     }
 
-    fprintf(stderr, "aurora_file_link[%u]: pipes connected\n", pipe_id);
+    fprintf(stderr, "aurora_flow_sw_emu[%u]: pipes connected\n", pipe_id);
 
     std::thread tx_thread([&tx_axis, tx_fd, control]() {
         while (*control == 0) {
@@ -131,7 +131,7 @@ void aurora_flow_emu(
     close(rx_fd);
     tx_thread.join();
 
-    fprintf(stderr, "aurora_file_link[%u]: shutdown\n", pipe_id);
+    fprintf(stderr, "aurora_flow_sw_emu[%u]: shutdown\n", pipe_id);
 #endif
 }
 

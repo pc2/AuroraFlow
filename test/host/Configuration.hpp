@@ -8,7 +8,7 @@
 #include <iostream>
 #include <iomanip>
 
-#include <cxxopts.hpp>
+#include "../cxxopts.hpp"
 
 enum class ExecutionMode { hw, hw_emu, sw_emu };
 

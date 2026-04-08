@@ -13,30 +13,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# AuroraFlow library build.
+# Produces .xo kernels for three execution modes:
+#   hw      : real Aurora GT transceiver
+#   hw_emu  : RTL with DPI-C GT stub using named pipes
+#   sw_emu  : HLS file-link kernel using named pipes
+#
+# Supports out-of-tree builds via BUILD_DIR override.
+#
 
-ECHO=@echo
+# Library source root (absolute path to this Makefile's directory)
+AURORA_FLOW_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+BUILD_DIR       ?= $(AURORA_FLOW_DIR)/build
 
-.PHONY: aurora host xclbin clean
+.PHONY: all aurora_hw aurora_hw_emu aurora_sw_emu clean
 
-CXX=c++
-MPICXX=mpic++
+all: aurora_hw aurora_hw_emu aurora_sw_emu
 
-# change here to test different boards
-PART := xcu280-fsvh2892-2L-e
+# Target board
+PART     := xcu280-fsvh2892-2L-e
 PLATFORM ?= xilinx_u280_gen3x16_xdma_1_202211_1
 
-TARGET := hw
-
-# most important target
-aurora: aurora_flow_$(TARGET)_0.xo aurora_flow_$(TARGET)_1.xo
-
-# configuration parameters
+# Configuration parameters
 INS_LOSS_NYQ := 8
 RX_EQ_MODE := LPM
 USE_FRAMING := 0
 DRAIN_AXI_ON_RESET := 0
 
-#supported is 32 and 64
+# Supported: 32 and 64
 FIFO_WIDTH := 64
 
 ifeq ($(FIFO_WIDTH), 32)
@@ -63,88 +67,66 @@ else
 	HAS_TLAST := 0
 endif
 
-# create the ips
-./ip_creation/aurora_64b66b_0/aurora_64b66b_0.xci: ./tcl/create_aurora_ip.tcl
-	mkdir -p ip_creation
-	rm -rf ip_creation/aurora_64b66b_0
-	vivado -mode batch -source $^ -tclargs $(PART) 0 $(INS_LOSS_NYQ) $(RX_EQ_MODE) $(USE_FRAMING)
+# ---------------------------------------------------------------------------
+# IP creation
+#   The create_*_ip.tcl scripts write to ./ip_creation/ relative to CWD,
+#   so we cd into $(BUILD_DIR) before invoking vivado.
+# ---------------------------------------------------------------------------
 
-./ip_creation/axis_data_fifo_rx/axis_data_fifo_rx.xci: ./tcl/create_fifo_ip.tcl
-	mkdir -p ip_creation
-	rm -rf ip_creation/axis_data_fifo_rx
-	vivado -mode batch -source $^ -tclargs $(PART) rx $(FIFO_WIDTH) $(RX_FIFO_DEPTH) $(RX_FIFO_PROG_FULL) $(RX_FIFO_PROG_EMPTY) $(HAS_TKEEP) $(HAS_TLAST)
+$(BUILD_DIR):
+	mkdir -p $@
 
-./ip_creation/axis_data_fifo_tx/axis_data_fifo_tx.xci: ./tcl/create_fifo_ip.tcl
-	mkdir -p ip_creation
-	rm -rf ip_creation/axis_data_fifo_tx
-	vivado -mode batch -source $^ -tclargs $(PART) tx $(FIFO_WIDTH) $(TX_FIFO_DEPTH) $(TX_FIFO_PROG_FULL) $(TX_FIFO_PROG_EMPTY) $(HAS_TKEEP) $(HAS_TLAST)
+$(BUILD_DIR)/ip_creation/aurora_64b66b_0/aurora_64b66b_0.xci: $(AURORA_FLOW_DIR)/tcl/create_aurora_ip.tcl | $(BUILD_DIR)
+	mkdir -p $(BUILD_DIR)/ip_creation
+	rm -rf $(BUILD_DIR)/ip_creation/aurora_64b66b_0
+	cd $(BUILD_DIR) && vivado -mode batch -source $< -tclargs $(PART) 0 $(INS_LOSS_NYQ) $(RX_EQ_MODE) $(USE_FRAMING)
 
-./ip_creation/axis_dwidth_converter_rx/axis_dwidth_converter_rx.xci: ./tcl/create_axis_dwidth_converter_ip.tcl
-	mkdir -p ip_creation
-	rm -rf ip_creation/axis_dwidth_converter_rx
-	vivado -mode batch -source $^ -tclargs $(PART) rx $(FIFO_WIDTH) $(HAS_TKEEP) $(HAS_TLAST)
+$(BUILD_DIR)/ip_creation/axis_data_fifo_rx/axis_data_fifo_rx.xci: $(AURORA_FLOW_DIR)/tcl/create_fifo_ip.tcl | $(BUILD_DIR)
+	mkdir -p $(BUILD_DIR)/ip_creation
+	rm -rf $(BUILD_DIR)/ip_creation/axis_data_fifo_rx
+	cd $(BUILD_DIR) && vivado -mode batch -source $< -tclargs $(PART) rx $(FIFO_WIDTH) $(RX_FIFO_DEPTH) $(RX_FIFO_PROG_FULL) $(RX_FIFO_PROG_EMPTY) $(HAS_TKEEP) $(HAS_TLAST)
 
-./ip_creation/axis_dwidth_converter_tx/axis_dwidth_converter_tx.xci: ./tcl/create_axis_dwidth_converter_ip.tcl
-	mkdir -p ip_creation
-	rm -rf ip_creation/axis_dwidth_converter_tx
-	vivado -mode batch -source $^ -tclargs $(PART) tx $(FIFO_WIDTH) $(HAS_TKEEP) $(HAS_TLAST)
+$(BUILD_DIR)/ip_creation/axis_data_fifo_tx/axis_data_fifo_tx.xci: $(AURORA_FLOW_DIR)/tcl/create_fifo_ip.tcl | $(BUILD_DIR)
+	mkdir -p $(BUILD_DIR)/ip_creation
+	rm -rf $(BUILD_DIR)/ip_creation/axis_data_fifo_tx
+	cd $(BUILD_DIR) && vivado -mode batch -source $< -tclargs $(PART) tx $(FIFO_WIDTH) $(TX_FIFO_DEPTH) $(TX_FIFO_PROG_FULL) $(TX_FIFO_PROG_EMPTY) $(HAS_TKEEP) $(HAS_TLAST)
 
-./ip_creation/ila_nfc/ila_nfc.xci: ./tcl/create_ila_nfc_ip.tcl
-	mkdir -p ip_creation
-	rm -rf ip_creation/ila_nfc
-	vivado -mode batch -source $^ -tclargs $(PART)
+$(BUILD_DIR)/ip_creation/axis_dwidth_converter_rx/axis_dwidth_converter_rx.xci: $(AURORA_FLOW_DIR)/tcl/create_axis_dwidth_converter_ip.tcl | $(BUILD_DIR)
+	mkdir -p $(BUILD_DIR)/ip_creation
+	rm -rf $(BUILD_DIR)/ip_creation/axis_dwidth_converter_rx
+	cd $(BUILD_DIR) && vivado -mode batch -source $< -tclargs $(PART) rx $(FIFO_WIDTH) $(HAS_TKEEP) $(HAS_TLAST)
 
-# synth flags
-COMMFLAGS := --platform $(PLATFORM) --target $(TARGET) --save-temps --debug
-HLSCFLAGS := --compile $(COMMFLAGS) -DDATA_WIDTH_BYTES=$(FIFO_WIDTH)
-LINKFLAGS := --link --optimize 3 $(COMMFLAGS)
+$(BUILD_DIR)/ip_creation/axis_dwidth_converter_tx/axis_dwidth_converter_tx.xci: $(AURORA_FLOW_DIR)/tcl/create_axis_dwidth_converter_ip.tcl | $(BUILD_DIR)
+	mkdir -p $(BUILD_DIR)/ip_creation
+	rm -rf $(BUILD_DIR)/ip_creation/axis_dwidth_converter_tx
+	cd $(BUILD_DIR) && vivado -mode batch -source $< -tclargs $(PART) tx $(FIFO_WIDTH) $(HAS_TKEEP) $(HAS_TLAST)
 
-# collect the RTL source code
-RTL_COMMON_SRC := ./rtl/aurora_flow_control_s_axi.v
-RTL_COMMON_SRC += ./rtl/aurora_flow_io.v
-RTL_COMMON_SRC += ./rtl/aurora_flow_nfc.v
-RTL_COMMON_SRC += ./rtl/aurora_flow_define.v
-RTL_COMMON_SRC += ./rtl/aurora_flow_configuration.v
-RTL_COMMON_SRC += ./rtl/aurora_flow_monitor.v
-RTL_COMMON_SRC += ./ip_creation/axis_data_fifo_rx/axis_data_fifo_rx.xci
-RTL_COMMON_SRC += ./ip_creation/axis_data_fifo_tx/axis_data_fifo_tx.xci
-RTL_COMMON_SRC += ./ip_creation/axis_dwidth_converter_rx/axis_dwidth_converter_rx.xci
-RTL_COMMON_SRC += ./ip_creation/axis_dwidth_converter_tx/axis_dwidth_converter_tx.xci
+# ---------------------------------------------------------------------------
+# Verilog templating and define generation
+# ---------------------------------------------------------------------------
 
-RTL_SRC := $(RTL_COMMON_SRC)
-RTL_SRC += ./rtl/aurora_flow_reset.v
-RTL_SRC += ./ip_creation/aurora_64b66b_0/aurora_64b66b_0.xci
-
-RTL_SRC_0 := $(RTL_SRC) ./rtl/aurora_flow_0.v ./xdc/aurora_64b66b_0.xdc
-RTL_SRC_1 := $(RTL_SRC) ./rtl/aurora_flow_1.v ./xdc/aurora_64b66b_1.xdc
-
-RTL_EMU_SRC := $(RTL_COMMON_SRC)
-RTL_EMU_SRC += ./rtl/aurora_flow_gt_stub.sv
-RTL_EMU_SRC += ./rtl/hw_emu/aurora_flow_define.v
-
-RTL_EMU_SRC_0 := $(RTL_EMU_SRC) ./rtl/hw_emu/aurora_flow_0.v
-RTL_EMU_SRC_1 := $(RTL_EMU_SRC) ./rtl/hw_emu/aurora_flow_1.v
-
-# verilog templating
-./rtl/aurora_flow_0.v: ./rtl/aurora_flow.v.template.v
-	cp ./rtl/aurora_flow.v.template.v ./rtl/aurora_flow_0.v
-	sed -i 's/@@@instance@@@/0/g' ./rtl/aurora_flow_0.v
-
-./rtl/aurora_flow_1.v: ./rtl/aurora_flow.v.template.v
-	cp ./rtl/aurora_flow.v.template.v ./rtl/aurora_flow_1.v
-	sed -i 's/@@@instance@@@/1/g' ./rtl/aurora_flow_1.v
-
-./rtl/hw_emu/aurora_flow_0.v: ./rtl/aurora_flow.v.template.v
-	mkdir -p ./rtl/hw_emu
-	cp ./rtl/aurora_flow.v.template.v $@
+$(BUILD_DIR)/rtl/aurora_flow_0.v: $(AURORA_FLOW_DIR)/rtl/aurora_flow.v.template.v
+	mkdir -p $(BUILD_DIR)/rtl
+	cp $< $@
 	sed -i 's/@@@instance@@@/0/g' $@
 
-./rtl/hw_emu/aurora_flow_1.v: ./rtl/aurora_flow.v.template.v
-	mkdir -p ./rtl/hw_emu
-	cp ./rtl/aurora_flow.v.template.v $@
+$(BUILD_DIR)/rtl/aurora_flow_1.v: $(AURORA_FLOW_DIR)/rtl/aurora_flow.v.template.v
+	mkdir -p $(BUILD_DIR)/rtl
+	cp $< $@
 	sed -i 's/@@@instance@@@/1/g' $@
 
-./rtl/aurora_flow_define.v:
+$(BUILD_DIR)/rtl/hw_emu/aurora_flow_0.v: $(AURORA_FLOW_DIR)/rtl/aurora_flow.v.template.v
+	mkdir -p $(BUILD_DIR)/rtl/hw_emu
+	cp $< $@
+	sed -i 's/@@@instance@@@/0/g' $@
+
+$(BUILD_DIR)/rtl/hw_emu/aurora_flow_1.v: $(AURORA_FLOW_DIR)/rtl/aurora_flow.v.template.v
+	mkdir -p $(BUILD_DIR)/rtl/hw_emu
+	cp $< $@
+	sed -i 's/@@@instance@@@/1/g' $@
+
+$(BUILD_DIR)/rtl/aurora_flow_define.v:
+	mkdir -p $(BUILD_DIR)/rtl
 	echo "" > $@
 	if [ $(USE_FRAMING) = 1 ]; then \
 		echo "\`define USE_FRAMING" >> $@; \
@@ -155,7 +137,7 @@ RTL_EMU_SRC_1 := $(RTL_EMU_SRC) ./rtl/hw_emu/aurora_flow_1.v
 	echo "\`define HAS_TKEEP $(HAS_TKEEP)" >> $@
 	echo "\`define HAS_TLAST $(HAS_TKEEP)" >> $@
 	echo "\`define FIFO_WIDTH $(FIFO_WIDTH)" >> $@
-	if [ $(SKIP_DATAWIDTH_CONVERTER = 1) ]; then \
+	if [ $(SKIP_DATAWIDTH_CONVERTER) = 1 ]; then \
 		echo "\`define SKIP_DATAWIDTH_CONVERTER" >> $@; \
 	fi
 	echo "\`define RX_FIFO_DEPTH $(RX_FIFO_DEPTH)" >> $@
@@ -164,78 +146,117 @@ RTL_EMU_SRC_1 := $(RTL_EMU_SRC) ./rtl/hw_emu/aurora_flow_1.v
 	echo "\`define RX_EQ_MODE \"$(RX_EQ_MODE)\"" >> $@
 	echo "\`define INS_LOSS_NYQ $(INS_LOSS_NYQ)" >> $@
 
-./rtl/hw_emu/aurora_flow_define.v: ./rtl/aurora_flow_define.v
-	mkdir -p ./rtl/hw_emu
+$(BUILD_DIR)/rtl/hw_emu/aurora_flow_define.v: $(BUILD_DIR)/rtl/aurora_flow_define.v
+	mkdir -p $(BUILD_DIR)/rtl/hw_emu
 	cp $< $@
 	echo "\`define HW_EMU" >> $@
 
-aurora_flow_$(TARGET)_0.xo: $(RTL_SRC_0) ./tcl/pack_kernel.tcl
-	rm -rf aurora_flow_0_project
-	mkdir aurora_flow_0_project
-	cd aurora_flow_0_project && vivado -mode batch -source ../tcl/pack_kernel.tcl -tclargs $(PART) 0
+# ---------------------------------------------------------------------------
+# RTL source lists (for dependency tracking)
+# ---------------------------------------------------------------------------
 
-aurora_flow_$(TARGET)_1.xo: $(RTL_SRC_1) ./tcl/pack_kernel.tcl
-	rm -rf aurora_flow_1_project
-	mkdir aurora_flow_1_project
-	cd aurora_flow_1_project && vivado -mode batch -source ../tcl/pack_kernel.tcl -tclargs $(PART) 1
+RTL_STATIC := $(AURORA_FLOW_DIR)/rtl/aurora_flow_control_s_axi.v \
+              $(AURORA_FLOW_DIR)/rtl/aurora_flow_io.v \
+              $(AURORA_FLOW_DIR)/rtl/aurora_flow_nfc.v \
+              $(AURORA_FLOW_DIR)/rtl/aurora_flow_configuration.v \
+              $(AURORA_FLOW_DIR)/rtl/aurora_flow_monitor.v
 
-# build example bitstream
-recv_$(TARGET).xo: ./hls/recv.cpp
-	v++ $(HLSCFLAGS) --temp_dir _x_recv --kernel recv --output $@ $^
+IP_COMMON := $(BUILD_DIR)/ip_creation/axis_data_fifo_rx/axis_data_fifo_rx.xci \
+             $(BUILD_DIR)/ip_creation/axis_data_fifo_tx/axis_data_fifo_tx.xci \
+             $(BUILD_DIR)/ip_creation/axis_dwidth_converter_rx/axis_dwidth_converter_rx.xci \
+             $(BUILD_DIR)/ip_creation/axis_dwidth_converter_tx/axis_dwidth_converter_tx.xci
 
-send_$(TARGET).xo: ./hls/send.cpp
-	v++ $(HLSCFLAGS) --temp_dir _x_send --kernel send --output $@ $^
-	
-aurora_flow_test_hw.xclbin: aurora send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_$(TARGET).cfg
-	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_test_$(TARGET) --config aurora_flow_test_$(TARGET).cfg --output $@ aurora_flow_$(TARGET)_0.xo aurora_flow_$(TARGET)_1.xo recv_$(TARGET).xo send_$(TARGET).xo
+RTL_HW_SRC_0 := $(RTL_STATIC) \
+                $(AURORA_FLOW_DIR)/rtl/aurora_flow_reset.v \
+                $(BUILD_DIR)/rtl/aurora_flow_0.v \
+                $(BUILD_DIR)/rtl/aurora_flow_define.v \
+                $(BUILD_DIR)/ip_creation/aurora_64b66b_0/aurora_64b66b_0.xci \
+                $(IP_COMMON) \
+                $(AURORA_FLOW_DIR)/xdc/aurora_64b66b_0.xdc
 
-aurora_flow_sw_emu.xo: ./hls/aurora_flow_emu.cpp
-	v++ $(HLSCFLAGS) --temp_dir _x_aurora_flow_emu --kernel aurora_flow_emu --output $@ $^
+RTL_HW_SRC_1 := $(RTL_STATIC) \
+                $(AURORA_FLOW_DIR)/rtl/aurora_flow_reset.v \
+                $(BUILD_DIR)/rtl/aurora_flow_1.v \
+                $(BUILD_DIR)/rtl/aurora_flow_define.v \
+                $(BUILD_DIR)/ip_creation/aurora_64b66b_0/aurora_64b66b_0.xci \
+                $(IP_COMMON) \
+                $(AURORA_FLOW_DIR)/xdc/aurora_64b66b_1.xdc
 
-aurora_flow_test_sw_emu.xclbin: aurora_flow_sw_emu.xo send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_$(TARGET).cfg
-	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_$(TARGET) --config aurora_flow_test_$(TARGET).cfg --output $@ aurora_flow_sw_emu.xo recv_$(TARGET).xo send_$(TARGET).xo
+RTL_HW_EMU_SRC_0 := $(RTL_STATIC) \
+                    $(AURORA_FLOW_DIR)/rtl/aurora_flow_gt_stub.sv \
+                    $(BUILD_DIR)/rtl/hw_emu/aurora_flow_0.v \
+                    $(BUILD_DIR)/rtl/hw_emu/aurora_flow_define.v \
+                    $(IP_COMMON)
 
-aurora_flow_hw_emu_0.xo: $(RTL_EMU_SRC_0) ./tcl/pack_kernel_hw_emu.tcl
-	rm -rf aurora_flow_hw_emu_0_project
-	mkdir aurora_flow_hw_emu_0_project
-	cd aurora_flow_hw_emu_0_project && vivado -mode batch -source ../tcl/pack_kernel_hw_emu.tcl -tclargs $(PART) 0
+RTL_HW_EMU_SRC_1 := $(RTL_STATIC) \
+                    $(AURORA_FLOW_DIR)/rtl/aurora_flow_gt_stub.sv \
+                    $(BUILD_DIR)/rtl/hw_emu/aurora_flow_1.v \
+                    $(BUILD_DIR)/rtl/hw_emu/aurora_flow_define.v \
+                    $(IP_COMMON)
 
-aurora_flow_hw_emu_1.xo: $(RTL_EMU_SRC_1) ./tcl/pack_kernel_hw_emu.tcl
-	rm -rf aurora_flow_hw_emu_1_project
-	mkdir aurora_flow_hw_emu_1_project
-	cd aurora_flow_hw_emu_1_project && vivado -mode batch -source ../tcl/pack_kernel_hw_emu.tcl -tclargs $(PART) 1
+# ---------------------------------------------------------------------------
+# Kernel packaging (hw)
+# ---------------------------------------------------------------------------
 
-aurora_flow_test_hw_emu.xclbin: aurora_flow_hw_emu_0.xo aurora_flow_hw_emu_1.xo send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_hw_emu.cfg ./rtl/aurora_flow_dpi.c
-	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_test_hw_emu --config aurora_flow_test_hw_emu.cfg \
-		--vivado.prop "fileset.sim_1.{xsim.compile.xsc.more_options}={$(CURDIR)/rtl/aurora_flow_dpi.c}" \
-		--output $@ aurora_flow_hw_emu_0.xo aurora_flow_hw_emu_1.xo recv_$(TARGET).xo send_$(TARGET).xo
+aurora_hw: $(BUILD_DIR)/aurora_flow_hw_0.xo $(BUILD_DIR)/aurora_flow_hw_1.xo
 
-emconfig.json:
-	emconfigutil --platform $(PLATFORM)
+$(BUILD_DIR)/aurora_flow_hw_0.xo: $(RTL_HW_SRC_0) $(AURORA_FLOW_DIR)/tcl/pack_kernel.tcl
+	rm -rf $(BUILD_DIR)/aurora_flow_hw_0_project
+	mkdir -p $(BUILD_DIR)/aurora_flow_hw_0_project
+	cd $(BUILD_DIR)/aurora_flow_hw_0_project && vivado -mode batch \
+		-source $(AURORA_FLOW_DIR)/tcl/pack_kernel.tcl \
+		-tclargs $(PART) 0 $(AURORA_FLOW_DIR) $(BUILD_DIR)
 
-xclbin: aurora_flow_test_$(TARGET).xclbin emconfig.json
+$(BUILD_DIR)/aurora_flow_hw_1.xo: $(RTL_HW_SRC_1) $(AURORA_FLOW_DIR)/tcl/pack_kernel.tcl
+	rm -rf $(BUILD_DIR)/aurora_flow_hw_1_project
+	mkdir -p $(BUILD_DIR)/aurora_flow_hw_1_project
+	cd $(BUILD_DIR)/aurora_flow_hw_1_project && vivado -mode batch \
+		-source $(AURORA_FLOW_DIR)/tcl/pack_kernel.tcl \
+		-tclargs $(PART) 1 $(AURORA_FLOW_DIR) $(BUILD_DIR)
 
-# host build for example
-CXXFLAGS += -std=c++17 -Wall -g
-CXXFLAGS += -I$(XILINX_XRT)/include -I./cxxopts/include
-CXXFLAGS += -fopenmp
-LDFLAGS := -L$(XILINX_XRT)/lib
-LDFLAGS += $(LDFLAGS) -lxrt_coreutil -luuid
+# ---------------------------------------------------------------------------
+# Kernel packaging (hw_emu)
+# ---------------------------------------------------------------------------
 
-host_aurora_flow_test: ./host/host_aurora_flow_test.cpp ./host/AuroraFlow.hpp ./host/Results.hpp ./host/Configuration.hpp ./host/Kernel.hpp
-	$(MPICXX) -o host_aurora_flow_test $< $(CXXFLAGS) $(LDFLAGS)
+aurora_hw_emu: $(BUILD_DIR)/aurora_flow_hw_emu_0.xo $(BUILD_DIR)/aurora_flow_hw_emu_1.xo
 
-host: host_aurora_flow_test
+$(BUILD_DIR)/aurora_flow_hw_emu_0.xo: $(RTL_HW_EMU_SRC_0) $(AURORA_FLOW_DIR)/tcl/pack_kernel_hw_emu.tcl
+	rm -rf $(BUILD_DIR)/aurora_flow_hw_emu_0_project
+	mkdir -p $(BUILD_DIR)/aurora_flow_hw_emu_0_project
+	cd $(BUILD_DIR)/aurora_flow_hw_emu_0_project && vivado -mode batch \
+		-source $(AURORA_FLOW_DIR)/tcl/pack_kernel_hw_emu.tcl \
+		-tclargs $(PART) 0 $(AURORA_FLOW_DIR) $(BUILD_DIR)
 
-# verilog testbenches
+$(BUILD_DIR)/aurora_flow_hw_emu_1.xo: $(RTL_HW_EMU_SRC_1) $(AURORA_FLOW_DIR)/tcl/pack_kernel_hw_emu.tcl
+	rm -rf $(BUILD_DIR)/aurora_flow_hw_emu_1_project
+	mkdir -p $(BUILD_DIR)/aurora_flow_hw_emu_1_project
+	cd $(BUILD_DIR)/aurora_flow_hw_emu_1_project && vivado -mode batch \
+		-source $(AURORA_FLOW_DIR)/tcl/pack_kernel_hw_emu.tcl \
+		-tclargs $(PART) 1 $(AURORA_FLOW_DIR) $(BUILD_DIR)
+
+# ---------------------------------------------------------------------------
+# HLS kernel packaging (sw_emu)
+# ---------------------------------------------------------------------------
+
+aurora_sw_emu: $(BUILD_DIR)/aurora_flow_sw_emu.xo
+
+$(BUILD_DIR)/aurora_flow_sw_emu.xo: $(AURORA_FLOW_DIR)/hls/aurora_flow_sw_emu.cpp | $(BUILD_DIR)
+	v++ --compile --platform $(PLATFORM) --target sw_emu --save-temps --debug \
+	    -DDATA_WIDTH_BYTES=$(FIFO_WIDTH) \
+	    --temp_dir $(BUILD_DIR)/_x_aurora_flow_sw_emu \
+	    --kernel aurora_flow_sw_emu --output $@ $<
+
+# ---------------------------------------------------------------------------
+# Verilog testbenches (run from CWD, use xsim.dir locally)
+# ---------------------------------------------------------------------------
 
 .PHONY: monitor_tb run_monitor_tb run_monitor_tb_gui
 
-xsim.dir/work/aurora_flow_monitor.sdb: ./rtl/aurora_flow_monitor.v
-	xvlog ./rtl/aurora_flow_monitor.v -d XSIM -d USE_FRAMING
+xsim.dir/work/aurora_flow_monitor.sdb: $(AURORA_FLOW_DIR)/rtl/aurora_flow_monitor.v
+	xvlog $< -d XSIM -d USE_FRAMING
 
-xsim.dir/work/aurora_flow_monitor_tb.sdb: ./rtl/aurora_flow_monitor_tb.v
-	xvlog ./rtl/aurora_flow_monitor_tb.v -d XSIM -d USE_FRAMING
+xsim.dir/work/aurora_flow_monitor_tb.sdb: $(AURORA_FLOW_DIR)/rtl/tb/aurora_flow_monitor_tb.v
+	xvlog $< -d XSIM -d USE_FRAMING
 
 xsim.dir/monitor_tb/xsimk: xsim.dir/work/aurora_flow_monitor.sdb xsim.dir/work/aurora_flow_monitor_tb.sdb
 	xelab -debug typical aurora_flow_monitor_tb -s monitor_tb -d USE_FRAMING
@@ -243,18 +264,18 @@ xsim.dir/monitor_tb/xsimk: xsim.dir/work/aurora_flow_monitor.sdb xsim.dir/work/a
 monitor_tb: xsim.dir/monitor_tb/xsimk
 
 run_monitor_tb: monitor_tb
-	xsim --tclbatch tcl/run_monitor_tb.tcl monitor_tb --wdb monitor_tb.wdb
+	xsim --tclbatch $(AURORA_FLOW_DIR)/tcl/run_monitor_tb.tcl monitor_tb --wdb monitor_tb.wdb
 
 run_monitor_tb_gui: monitor_tb
 	xsim --gui monitor_tb
 
 .PHONY: nfc_tb run_nfc_tb run_nfc_tb_gui
 
-xsim.dir/work/aurora_flow_nfc.sdb: ./rtl/aurora_flow_nfc.v
-	xvlog ./rtl/aurora_flow_nfc.v -d XSIM
+xsim.dir/work/aurora_flow_nfc.sdb: $(AURORA_FLOW_DIR)/rtl/aurora_flow_nfc.v
+	xvlog $< -d XSIM
 
-xsim.dir/work/aurora_flow_nfc_tb.sdb: ./rtl/aurora_flow_nfc_tb.v
-	xvlog ./rtl/aurora_flow_nfc_tb.v -d XSIM
+xsim.dir/work/aurora_flow_nfc_tb.sdb: $(AURORA_FLOW_DIR)/rtl/tb/aurora_flow_nfc_tb.v
+	xvlog $< -d XSIM
 
 xsim.dir/nfc_tb/xsimk: xsim.dir/work/aurora_flow_nfc.sdb xsim.dir/work/aurora_flow_nfc_tb.sdb
 	xelab -debug typical aurora_flow_nfc_tb -s nfc_tb
@@ -262,18 +283,18 @@ xsim.dir/nfc_tb/xsimk: xsim.dir/work/aurora_flow_nfc.sdb xsim.dir/work/aurora_fl
 nfc_tb: xsim.dir/nfc_tb/xsimk
 
 run_nfc_tb: nfc_tb
-	xsim --tclbatch tcl/run_nfc_tb.tcl nfc_tb --wdb nfc_tb.wdb
+	xsim --tclbatch $(AURORA_FLOW_DIR)/tcl/run_nfc_tb.tcl nfc_tb --wdb nfc_tb.wdb
 
 run_nfc_tb_gui: nfc_tb
 	xsim --gui nfc_tb
 
 .PHONY: configuration_tb run_configuration_tb run_configuration_tb_gui
 
-xsim.dir/work/aurora_flow_configuration.sdb: ./rtl/aurora_flow_configuration.v ./rtl/aurora_flow_define.v
-	xvlog ./rtl/aurora_flow_configuration.v
+xsim.dir/work/aurora_flow_configuration.sdb: $(AURORA_FLOW_DIR)/rtl/aurora_flow_configuration.v $(BUILD_DIR)/rtl/aurora_flow_define.v
+	xvlog $(AURORA_FLOW_DIR)/rtl/aurora_flow_configuration.v -i $(BUILD_DIR)/rtl
 
-xsim.dir/work/aurora_flow_configuration_tb.sdb: ./rtl/aurora_flow_configuration_tb.v
-	xvlog ./rtl/aurora_flow_configuration_tb.v
+xsim.dir/work/aurora_flow_configuration_tb.sdb: $(AURORA_FLOW_DIR)/rtl/tb/aurora_flow_configuration_tb.v
+	xvlog $<
 
 xsim.dir/configuration_tb/xsimk: xsim.dir/work/aurora_flow_configuration.sdb xsim.dir/work/aurora_flow_configuration_tb.sdb
 	xelab -debug typical aurora_flow_configuration_tb -s configuration_tb
@@ -281,14 +302,14 @@ xsim.dir/configuration_tb/xsimk: xsim.dir/work/aurora_flow_configuration.sdb xsi
 configuration_tb: xsim.dir/configuration_tb/xsimk
 
 run_configuration_tb: configuration_tb
-	xsim --tclbatch tcl/run_configuration_tb.tcl configuration_tb --wdb configuration_tb.wdb
+	xsim --tclbatch $(AURORA_FLOW_DIR)/tcl/run_configuration_tb.tcl configuration_tb --wdb configuration_tb.wdb
 
 run_configuration_tb_gui: configuration_tb
 	xsim --gui configuration_tb
 
-# run test
-test: host aurora_flow_test_sw_emu.xclbin
-	XCL_EMULATION_MODE=sw_emu ./host_aurora_flow_test -p aurora_flow_test_sw_emu.xclbin
+# ---------------------------------------------------------------------------
+# Clean
+# ---------------------------------------------------------------------------
 
 clean:
 	git clean -Xdf

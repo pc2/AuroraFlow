@@ -10,3 +10,6 @@ ml changeFPGAlinks
 
 ml toolchain
 ml gompi/2025b
+
+ml devel
+ml CMake/4.0.3-GCCcore-14.3.0

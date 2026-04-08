@@ -6,13 +6,20 @@
 #SBATCH --tasks-per-node 6
 #SBATCH --mail-type=ALL
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AURORA_FLOW_DIR="${AURORA_FLOW_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+
 if ! command -v v++ &> /dev/null
 then
-    source env.sh
+    source "${AURORA_FLOW_DIR}/env.sh"
 fi
 
-./scripts/configure_pair_hw.sh
-./scripts/reset.sh
+# Build artifacts live under test/build/
+BUILD_DIR="${BUILD_DIR:-${SCRIPT_DIR}/../build}"
+cd "$BUILD_DIR"
+
+"${SCRIPT_DIR}/configure_pair_hw.sh"
+"${SCRIPT_DIR}/reset.sh"
 
 ./host_aurora_flow_test -m 1 -p aurora_flow_test_hw_0_64.xclbin -f 0 $@
 

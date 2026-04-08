@@ -67,23 +67,23 @@ module aurora_flow_io (
 `ifdef SKIP_DATAWIDTH_CONVERTER
 
 axis_data_fifo_rx axis_data_fifo_rx_0 (
-  .s_axis_aresetn   (ap_rst_n_u),           // input wirewire s_axis_aresetn
-  .s_axis_aclk      (user_clk),             // input wirewire s_axis_aclk
-  .s_axis_tdata     (m_axi_rx_tdata_u),     // input wirewire [255 : 0] s_axis_tdata
+  .s_axis_aresetn   (ap_rst_n_u),           // input wire s_axis_aresetn
+  .s_axis_aclk      (user_clk),             // input wire s_axis_aclk
+  .s_axis_tdata     (m_axi_rx_tdata_u),     // input wire [255 : 0] s_axis_tdata
 `ifdef USE_FRAMING
   .s_axis_tkeep     (m_axi_rx_tkeep_u),
   .s_axis_tlast     (m_axi_rx_tlast_u),
 `endif
-  .s_axis_tready    (m_axi_rx_tready_u),                     // output regwire s_axis_tready
-  .s_axis_tvalid    (m_axi_rx_tvalid_u),    // input wirewire s_axis_tvalid
-  .m_axis_aclk      (ap_clk),               // input wirewire m_axis_aclk
-  .m_axis_tdata     (rx_axis_tdata),        // output regwire [255 : 0] m_axis_tdata
+  .s_axis_tready    (),                     // output unused
+  .s_axis_tvalid    (m_axi_rx_tvalid_u),    // input wire s_axis_tvalid
+  .m_axis_aclk      (ap_clk),               // input wire m_axis_aclk
+  .m_axis_tdata     (rx_axis_tdata),        // output reg [255 : 0] m_axis_tdata
 `ifdef USE_FRAMING
   .m_axis_tkeep     (rx_axis_tkeep),
   .m_axis_tlast     (rx_axis_tlast),
 `endif
-  .m_axis_tready    (rx_axis_tready),       // input wirewire m_axis_tready
-  .m_axis_tvalid    (rx_axis_tvalid),       // output regwire m_axis_tvalid
+  .m_axis_tready    (rx_axis_tready),       // input wire m_axis_tready
+  .m_axis_tvalid    (rx_axis_tvalid),       // output reg m_axis_tvalid
   .almost_full      (fifo_rx_almost_full_u),
   .prog_full        (fifo_rx_prog_full_u),
   .almost_empty     (fifo_rx_almost_empty),
@@ -91,23 +91,23 @@ axis_data_fifo_rx axis_data_fifo_rx_0 (
 );
 
 axis_data_fifo_tx axis_data_fifo_tx_0 (
-  .s_axis_aresetn   (ap_rst_n),             // input wirewire s_axis_aresetn
-  .s_axis_aclk      (ap_clk),               // input wirewire s_axis_aclk
-  .s_axis_tdata     (tx_axis_tdata),        // input wirewire [255 : 0] s_axis_tdata
+  .s_axis_aresetn   (ap_rst_n),             // input wire s_axis_aresetn
+  .s_axis_aclk      (ap_clk),               // input wire s_axis_aclk
+  .s_axis_tdata     (tx_axis_tdata),        // input wire [255 : 0] s_axis_tdata
 `ifdef USE_FRAMING
   .s_axis_tkeep     (tx_axis_tkeep),
   .s_axis_tlast     (tx_axis_tlast),
 `endif
-  .s_axis_tready    (tx_axis_tready),       // output regwire s_axis_tready
-  .s_axis_tvalid    (tx_axis_tvalid),       // input wirewire s_axis_tvalid
-  .m_axis_aclk      (user_clk),             // input wirewire m_axis_aclk
-  .m_axis_tdata     (s_axi_tx_tdata_u),      // output regwire [255 : 0] m_axis_tdata
+  .s_axis_tready    (tx_axis_tready),       // output reg s_axis_tready
+  .s_axis_tvalid    (tx_axis_tvalid),       // input wire s_axis_tvalid
+  .m_axis_aclk      (user_clk),             // input wire m_axis_aclk
+  .m_axis_tdata     (s_axi_tx_tdata_u),      // output reg [255 : 0] m_axis_tdata
 `ifdef USE_FRAMING
   .m_axis_tkeep     (s_axi_tx_tkeep_u),
   .m_axis_tlast     (s_axi_tx_tlast_u),
 `endif
-  .m_axis_tready    (s_axi_tx_tready_u),    // input wirewire m_axis_tready
-  .m_axis_tvalid    (s_axi_tx_tvalid_u),    // output regwire m_axis_tvalid
+  .m_axis_tready    (s_axi_tx_tready_u),    // input wire m_axis_tready
+  .m_axis_tvalid    (s_axi_tx_tvalid_u),    // output reg m_axis_tvalid
   .almost_full      (fifo_tx_almost_full),
   .prog_full        (fifo_tx_prog_full),
   .almost_empty     (fifo_tx_almost_empty_u),
@@ -132,23 +132,23 @@ wire [63:0]     dwidth_rx_m_axis_tkeep_u;
 `endif
 
 axis_data_fifo_rx axis_data_fifo_rx_0 (
-  .s_axis_aresetn   (ap_rst_n_u),           // input wirewire s_axis_aresetn
-  .s_axis_aclk      (user_clk),             // input wirewire s_axis_aclk
-  .s_axis_tdata     (dwidth_rx_m_axis_tdata_u),     // input wirewire [255 : 0] s_axis_tdata
+  .s_axis_aresetn   (ap_rst_n_u),           // input wire s_axis_aresetn
+  .s_axis_aclk      (user_clk),             // input wire s_axis_aclk
+  .s_axis_tdata     (dwidth_rx_m_axis_tdata_u),     // input wire [255 : 0] s_axis_tdata
 `ifdef USE_FRAMING
   .s_axis_tkeep     (dwidth_rx_m_axis_tkeep_u),
   .s_axis_tlast     (dwidth_rx_m_axis_tlast_u),
 `endif
-  .s_axis_tready    (dwidth_rx_m_axis_tready_u),                     // output regwire s_axis_tready
-  .s_axis_tvalid    (dwidth_rx_m_axis_tvalid_u),    // input wirewire s_axis_tvalid
-  .m_axis_aclk      (ap_clk),               // input wirewire m_axis_aclk
-  .m_axis_tdata     (rx_axis_tdata),        // output regwire [255 : 0] m_axis_tdata
+  .s_axis_tready    (dwidth_rx_m_axis_tready_u),                     // output reg s_axis_tready
+  .s_axis_tvalid    (dwidth_rx_m_axis_tvalid_u),    // input wire s_axis_tvalid
+  .m_axis_aclk      (ap_clk),               // input wire m_axis_aclk
+  .m_axis_tdata     (rx_axis_tdata),        // output reg [255 : 0] m_axis_tdata
 `ifdef USE_FRAMING
   .m_axis_tkeep     (rx_axis_tkeep),
   .m_axis_tlast     (rx_axis_tlast),
 `endif
-  .m_axis_tready    (rx_axis_tready),       // input wirewire m_axis_tready
-  .m_axis_tvalid    (rx_axis_tvalid),       // output regwire m_axis_tvalid
+  .m_axis_tready    (rx_axis_tready),       // input wire m_axis_tready
+  .m_axis_tvalid    (rx_axis_tvalid),       // output reg m_axis_tvalid
   .almost_full      (fifo_rx_almost_full_u),
   .prog_full        (fifo_rx_prog_full_u),
   .almost_empty     (fifo_rx_almost_empty),
@@ -175,23 +175,23 @@ axis_dwidth_converter_rx axis_dwidth_converter_rx_0 (
 );
 
 axis_data_fifo_tx axis_data_fifo_tx_0 (
-  .s_axis_aresetn   (ap_rst_n),             // input wirewire s_axis_aresetn
-  .s_axis_aclk      (ap_clk),               // input wirewire s_axis_aclk
-  .s_axis_tdata     (tx_axis_tdata),        // input wirewire [255 : 0] s_axis_tdata
+  .s_axis_aresetn   (ap_rst_n),             // input wire s_axis_aresetn
+  .s_axis_aclk      (ap_clk),               // input wire s_axis_aclk
+  .s_axis_tdata     (tx_axis_tdata),        // input wire [255 : 0] s_axis_tdata
 `ifdef USE_FRAMING
   .s_axis_tkeep     (tx_axis_tkeep),
   .s_axis_tlast     (tx_axis_tlast),
 `endif
-  .s_axis_tready    (tx_axis_tready),       // output regwire s_axis_tready
-  .s_axis_tvalid    (tx_axis_tvalid),       // input wirewire s_axis_tvalid
-  .m_axis_aclk      (user_clk),             // input wirewire m_axis_aclk
-  .m_axis_tdata     (dwidth_tx_s_axis_tdata_u),      // output regwire [255 : 0] m_axis_tdata
+  .s_axis_tready    (tx_axis_tready),       // output reg s_axis_tready
+  .s_axis_tvalid    (tx_axis_tvalid),       // input wire s_axis_tvalid
+  .m_axis_aclk      (user_clk),             // input wire m_axis_aclk
+  .m_axis_tdata     (dwidth_tx_s_axis_tdata_u),      // output reg [255 : 0] m_axis_tdata
 `ifdef USE_FRAMING
   .m_axis_tkeep     (dwidth_tx_s_axis_tkeep_u),
   .m_axis_tlast     (dwidth_tx_s_axis_tlast_u),
 `endif
-  .m_axis_tready    (dwidth_tx_s_axis_tready_u),    // input wirewire m_axis_tready
-  .m_axis_tvalid    (dwidth_tx_s_axis_tvalid_u),    // output regwire m_axis_tvalid
+  .m_axis_tready    (dwidth_tx_s_axis_tready_u),    // input wire m_axis_tready
+  .m_axis_tvalid    (dwidth_tx_s_axis_tvalid_u),    // output reg m_axis_tvalid
   .almost_full      (fifo_tx_almost_full),
   .prog_full        (fifo_tx_prog_full),
   .almost_empty     (fifo_tx_almost_empty_u),
