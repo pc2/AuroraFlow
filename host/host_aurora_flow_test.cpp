@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "Aurora.hpp"
+#include "AuroraFlow.hpp"
 #include "experimental/xrt_kernel.h"
 #include "experimental/xrt_ip.h"
 #include "version.h"
@@ -24,7 +24,7 @@
 #include <thread>
 #include <iostream>
 #include <filesystem>
-#include <fstream>
+#include <mpi.h>
 
 #include "Configuration.hpp"
 #include "Results.hpp"
@@ -81,9 +81,21 @@ std::string bdf_map(uint32_t device_id, bool emulation)
 
 int main(int argc, char *argv[])
 {
+    MPI_Init(&argc, &argv);
+    int rank = 0, world_size = 1;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
     Configuration config(argc, argv);
- 
-    bool emulation = (std::getenv("XCL_EMULATION_MODE") != nullptr);
+    config.rank = rank;
+    config.world_size = world_size;
+
+    const char *emu_env = std::getenv("XCL_EMULATION_MODE");
+    if (emu_env) {
+        config.execution_mode = (std::string(emu_env) == "hw_emu") ? ExecutionMode::hw_emu : ExecutionMode::sw_emu;
+        config.num_instances = 2;
+    }
+    bool emulation = (config.execution_mode != ExecutionMode::hw);
 
     if (emulation) {
         config.finish_setup(64, false, emulation);
@@ -113,35 +125,35 @@ int main(int argc, char *argv[])
     if (config.wait) {
         wait_for_enter();
     }
-    std::vector<Aurora> auroras(config.num_instances);
+    std::vector<AuroraFlow> auroras(config.num_instances);
+
+    std::vector<bool> statuses(config.num_instances);
+    for (uint32_t i = 0; i < config.num_instances; i++) {
+        auroras[i] = AuroraFlow(i % 2, devices[i / 2], xclbin_uuids[i / 2]);
+        statuses[i] = auroras[i].core_status_ok(3000);
+        if (!statuses[i]) {
+            std::cout << "problem with core " << i % 2
+                << " on device " << device_bdfs[i / 2]
+                << " with id " << device_ids[i / 2] << std::endl;
+        }
+    }
+    for (bool ok: statuses) {
+        if (!ok) exit(EXIT_FAILURE);
+    }
+
+    std::cout << "All links are ready" << std::endl;
+
+    if (config.check_status) {
+        exit(EXIT_SUCCESS);
+    }
 
     if (!emulation) {
-        std::vector<bool> statuses(config.num_instances);
-        for (uint32_t i = 0; i < config.num_instances; i++) {
-            auroras[i] = Aurora(i % 2, devices[i / 2], xclbin_uuids[i / 2]);
-            statuses[i] = auroras[i].core_status_ok(3000);
-            if (!statuses[i]) {
-                std::cout << "problem with core " << i % 2 
-                    << " on device " << device_bdfs[i / 2] 
-                    << " with id " << device_ids[i / 2] << std::endl;
-            }
-        }
-        for (bool ok: statuses) {
-            if (!ok) exit(EXIT_FAILURE);
-        }
-
-        std::cout << "All links are ready" << std::endl;
-
-        if (config.check_status) {
-            exit(EXIT_SUCCESS);
-        }
-
         config.finish_setup(auroras[0].fifo_width, auroras[0].has_framing(), emulation);
     }
 
     config.print();
     if (!emulation) {
-        std::cout << "Aurora core has framing " << (auroras[0].has_framing() ? "enabled" : "disabled")
+        std::cout << "AuroraFlow core has framing " << (auroras[0].has_framing() ? "enabled" : "disabled")
                   << " and input width of " << auroras[0].fifo_width << " bytes" << std::endl;
     }
 
@@ -151,11 +163,13 @@ int main(int argc, char *argv[])
     std::vector<SendKernel> send_kernels(config.num_instances);
     std::vector<RecvKernel> recv_kernels(config.num_instances);
     for (uint32_t i = 0; i < config.num_instances; i++) {
-        send_kernels[i] = SendKernel(config.instances[i], devices[emulation ? 0 : i / 2], xclbin_uuids[emulation ? 0 : i / 2], config, data[i]);
-        recv_kernels[i] = RecvKernel(config.instances[i], devices[emulation ? 0 : i / 2], xclbin_uuids[emulation ? 0 : i / 2], config);
+        send_kernels[i] = SendKernel(i % 2, devices[i / 2], xclbin_uuids[i / 2], config, data[i]);
+        recv_kernels[i] = RecvKernel(i % 2, devices[i / 2], xclbin_uuids[i / 2], config);
     }
 
-    Results results(config, auroras, emulation, device_bdfs);
+    Results results(config, auroras, device_bdfs);
+
+    MPI_Barrier(MPI_COMM_WORLD);
 
     for (uint32_t r = 0; r < config.repetitions; r++) {
         std::cout << "Repetition " << r << " with " << config.message_sizes[r] << " bytes" << std::endl;
@@ -163,7 +177,7 @@ int main(int argc, char *argv[])
             uint32_t i_recv = mode_map(i, config.num_instances, config.test_mode);
             SendKernel &send = send_kernels[i];
             RecvKernel &recv = recv_kernels[i_recv];
-            Aurora &recv_aurora = auroras[i_recv];
+            AuroraFlow &recv_aurora = auroras[i_recv];
             std::cout << "Sending from " << i << " to " << i_recv << std::endl;
             try {
                 send.prepare_repetition(r);
@@ -264,6 +278,7 @@ int main(int argc, char *argv[])
     results.print_errors();
     results.write();
 
+    MPI_Finalize();
     return results.has_errors();
 }
 

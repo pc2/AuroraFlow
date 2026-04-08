@@ -10,9 +10,12 @@
 
 #include <cxxopts.hpp>
 
+enum class ExecutionMode { hw, hw_emu, sw_emu };
+
 class Configuration
 {
 public:
+    ExecutionMode execution_mode = ExecutionMode::hw;
     uint32_t device_id;
     uint32_t num_instances = 6;
     std::string xclbin_path;
@@ -27,6 +30,8 @@ public:
     bool semaphore;
     uint32_t timeout_ms;
     bool wait;
+    int rank = 0;
+    int world_size = 1;
 
     std::vector<uint32_t> instances;
     std::vector<uint32_t> message_sizes;
@@ -68,6 +73,12 @@ public:
         }
 
         xclbin_path = result["xclbin_path"].as<std::string>();
+        if (result.count("xclbin_path") == 0) {
+            const char *emu_mode = std::getenv("XCL_EMULATION_MODE");
+            if (emu_mode != nullptr) {
+                xclbin_path = std::string("aurora_flow_test_") + emu_mode + ".xclbin";
+            }
+        }
         repetitions = result["repetitions"].as<uint32_t>();
         iterations = result["iterations"].as<uint32_t>();
         max_frame_size = result["frame_size"].as<uint32_t>();
@@ -85,7 +96,7 @@ public:
             exit(EXIT_FAILURE);
         }
 
-        if (test_mode == 2 && num_instances == 2) {
+        if (test_mode == 2 && num_instances == 2 && std::getenv("XCL_EMULATION_MODE") == nullptr) {
             std::cout << "ring test mode is incompatible with single device selection" << std::endl;
             exit(EXIT_FAILURE);
         }
@@ -105,19 +116,9 @@ public:
             exit(EXIT_FAILURE);
         }
 
-        if (emulation) {
-            if (test_mode == 0) {
-                xclbin_path = "aurora_flow_test_sw_emu_loopback.xclbin";
-            } else {
-                std::cout << "Error: unsupported test mode for emulation" << std::endl;
-                exit(EXIT_FAILURE);
-            }
-        }
-        
         instances.resize(num_instances);
         for (uint32_t i = 0; i < num_instances; i++) {
-            uint32_t i_inst = i + (2 * device_id);
-            instances[i] = emulation ? i_inst : i_inst % 2;
+            instances[i] = i + num_instances * rank;
         }
 
         if (!has_framing) {

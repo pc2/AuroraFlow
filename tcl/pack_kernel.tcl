@@ -112,7 +112,7 @@ ipx::save_core [ipx::current_core]
 
 # Generate Vitis Kernel from Vivado IP
 package_xo -force \
-           -xo_path ../aurora_flow_${instance}.xo \
+           -xo_path ../aurora_flow_hw_${instance}.xo \
            -kernel_name aurora_flow_${instance} \
            -ctrl_protocol ap_ctrl_none \
            -ip_directory ./aurora_flow_ip_${instance} \

@@ -219,3 +219,4 @@ axis_dwidth_converter_tx axis_dwidth_converter_tx_0 (
 `endif
 
 endmodule
+`default_nettype wire

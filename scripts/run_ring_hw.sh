@@ -12,6 +12,6 @@ fi
 
 ./scripts/reset.sh
 
-./scripts/configure_loopback.sh
+./scripts/configure_ring_hw.sh
 
-./host_aurora_flow_test -m 0 $@
+./host_aurora_flow_test -m 2 $@

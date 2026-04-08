@@ -11,7 +11,7 @@ then
     source env.sh
 fi
 
-./scripts/configure_pair.sh
+./scripts/configure_pair_hw.sh
 ./scripts/reset.sh
 
 ./host_aurora_flow_test -m 1 -p aurora_flow_test_hw_0_64.xclbin -f 0 $@

@@ -18,9 +18,6 @@ ECHO=@echo
 
 .PHONY: aurora host xclbin clean
 
-# most important target
-aurora: aurora_flow_0.xo aurora_flow_1.xo
-
 CXX=c++
 MPICXX=mpic++
 
@@ -29,6 +26,9 @@ PART := xcu280-fsvh2892-2L-e
 PLATFORM ?= xilinx_u280_gen3x16_xdma_1_202211_1
 
 TARGET := hw
+
+# most important target
+aurora: aurora_flow_$(TARGET)_0.xo aurora_flow_$(TARGET)_1.xo
 
 # configuration parameters
 INS_LOSS_NYQ := 8
@@ -100,23 +100,32 @@ HLSCFLAGS := --compile $(COMMFLAGS) -DDATA_WIDTH_BYTES=$(FIFO_WIDTH)
 LINKFLAGS := --link --optimize 3 $(COMMFLAGS)
 
 # collect the RTL source code
-RTL_SRC := ./rtl/aurora_flow_control_s_axi.v
-RTL_SRC += ./rtl/aurora_flow_io.v
-RTL_SRC += ./rtl/aurora_flow_nfc.v
-RTL_SRC += ./rtl/aurora_flow_define.v
-RTL_SRC += ./rtl/aurora_flow_configuration.v
+RTL_COMMON_SRC := ./rtl/aurora_flow_control_s_axi.v
+RTL_COMMON_SRC += ./rtl/aurora_flow_io.v
+RTL_COMMON_SRC += ./rtl/aurora_flow_nfc.v
+RTL_COMMON_SRC += ./rtl/aurora_flow_define.v
+RTL_COMMON_SRC += ./rtl/aurora_flow_configuration.v
+RTL_COMMON_SRC += ./rtl/aurora_flow_monitor.v
+RTL_COMMON_SRC += ./ip_creation/axis_data_fifo_rx/axis_data_fifo_rx.xci
+RTL_COMMON_SRC += ./ip_creation/axis_data_fifo_tx/axis_data_fifo_tx.xci
+RTL_COMMON_SRC += ./ip_creation/axis_dwidth_converter_rx/axis_dwidth_converter_rx.xci
+RTL_COMMON_SRC += ./ip_creation/axis_dwidth_converter_tx/axis_dwidth_converter_tx.xci
+
+RTL_SRC := $(RTL_COMMON_SRC)
 RTL_SRC += ./rtl/aurora_flow_reset.v
-RTL_SRC += ./rtl/aurora_flow_monitor.v
-RTL_SRC += ./ip_creation/aurora_64b66b_0/aurora_64b66b_0.xci 
-RTL_SRC += ./ip_creation/axis_data_fifo_rx/axis_data_fifo_rx.xci
-RTL_SRC += ./ip_creation/axis_data_fifo_tx/axis_data_fifo_tx.xci
-RTL_SRC += ./ip_creation/axis_dwidth_converter_rx/axis_dwidth_converter_rx.xci
-RTL_SRC += ./ip_creation/axis_dwidth_converter_tx/axis_dwidth_converter_tx.xci
+RTL_SRC += ./ip_creation/aurora_64b66b_0/aurora_64b66b_0.xci
 
 RTL_SRC_0 := $(RTL_SRC) ./rtl/aurora_flow_0.v ./xdc/aurora_64b66b_0.xdc
 RTL_SRC_1 := $(RTL_SRC) ./rtl/aurora_flow_1.v ./xdc/aurora_64b66b_1.xdc
 
-# some verilog templating
+RTL_EMU_SRC := $(RTL_COMMON_SRC)
+RTL_EMU_SRC += ./rtl/aurora_flow_gt_stub.sv
+RTL_EMU_SRC += ./rtl/hw_emu/aurora_flow_define.v
+
+RTL_EMU_SRC_0 := $(RTL_EMU_SRC) ./rtl/hw_emu/aurora_flow_0.v
+RTL_EMU_SRC_1 := $(RTL_EMU_SRC) ./rtl/hw_emu/aurora_flow_1.v
+
+# verilog templating
 ./rtl/aurora_flow_0.v: ./rtl/aurora_flow.v.template.v
 	cp ./rtl/aurora_flow.v.template.v ./rtl/aurora_flow_0.v
 	sed -i 's/@@@instance@@@/0/g' ./rtl/aurora_flow_0.v
@@ -124,6 +133,16 @@ RTL_SRC_1 := $(RTL_SRC) ./rtl/aurora_flow_1.v ./xdc/aurora_64b66b_1.xdc
 ./rtl/aurora_flow_1.v: ./rtl/aurora_flow.v.template.v
 	cp ./rtl/aurora_flow.v.template.v ./rtl/aurora_flow_1.v
 	sed -i 's/@@@instance@@@/1/g' ./rtl/aurora_flow_1.v
+
+./rtl/hw_emu/aurora_flow_0.v: ./rtl/aurora_flow.v.template.v
+	mkdir -p ./rtl/hw_emu
+	cp ./rtl/aurora_flow.v.template.v $@
+	sed -i 's/@@@instance@@@/0/g' $@
+
+./rtl/hw_emu/aurora_flow_1.v: ./rtl/aurora_flow.v.template.v
+	mkdir -p ./rtl/hw_emu
+	cp ./rtl/aurora_flow.v.template.v $@
+	sed -i 's/@@@instance@@@/1/g' $@
 
 ./rtl/aurora_flow_define.v:
 	echo "" > $@
@@ -145,12 +164,17 @@ RTL_SRC_1 := $(RTL_SRC) ./rtl/aurora_flow_1.v ./xdc/aurora_64b66b_1.xdc
 	echo "\`define RX_EQ_MODE \"$(RX_EQ_MODE)\"" >> $@
 	echo "\`define INS_LOSS_NYQ $(INS_LOSS_NYQ)" >> $@
 
-aurora_flow_0.xo: $(RTL_SRC_0) ./tcl/pack_kernel.tcl
+./rtl/hw_emu/aurora_flow_define.v: ./rtl/aurora_flow_define.v
+	mkdir -p ./rtl/hw_emu
+	cp $< $@
+	echo "\`define HW_EMU" >> $@
+
+aurora_flow_$(TARGET)_0.xo: $(RTL_SRC_0) ./tcl/pack_kernel.tcl
 	rm -rf aurora_flow_0_project
 	mkdir aurora_flow_0_project
 	cd aurora_flow_0_project && vivado -mode batch -source ../tcl/pack_kernel.tcl -tclargs $(PART) 0
 
-aurora_flow_1.xo: $(RTL_SRC_1) ./tcl/pack_kernel.tcl
+aurora_flow_$(TARGET)_1.xo: $(RTL_SRC_1) ./tcl/pack_kernel.tcl
 	rm -rf aurora_flow_1_project
 	mkdir aurora_flow_1_project
 	cd aurora_flow_1_project && vivado -mode batch -source ../tcl/pack_kernel.tcl -tclargs $(PART) 1
@@ -162,21 +186,34 @@ recv_$(TARGET).xo: ./hls/recv.cpp
 send_$(TARGET).xo: ./hls/send.cpp
 	v++ $(HLSCFLAGS) --temp_dir _x_send --kernel send --output $@ $^
 	
-send_recv_$(TARGET).xo: ./hls/send_recv.cpp
-	v++ $(HLSCFLAGS) --temp_dir _x_send_recv --kernel send_recv --output $@ $^
-	
 aurora_flow_test_hw.xclbin: aurora send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_$(TARGET).cfg
-	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_test_$(TARGET) --config aurora_flow_test_$(TARGET).cfg --output $@ aurora_flow_0.xo aurora_flow_1.xo recv_$(TARGET).xo send_$(TARGET).xo
+	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_test_$(TARGET) --config aurora_flow_test_$(TARGET).cfg --output $@ aurora_flow_$(TARGET)_0.xo aurora_flow_$(TARGET)_1.xo recv_$(TARGET).xo send_$(TARGET).xo
 
-aurora_flow_ring_hw.xclbin: aurora send_recv_$(TARGET).xo aurora_flow_ring_$(TARGET).cfg
-	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_ring_$(TARGET) --config aurora_flow_ring_$(TARGET).cfg --output $@ aurora_flow_0.xo aurora_flow_1.xo send_recv_$(TARGET).xo
+aurora_flow_sw_emu.xo: ./hls/aurora_flow_emu.cpp
+	v++ $(HLSCFLAGS) --temp_dir _x_aurora_flow_emu --kernel aurora_flow_emu --output $@ $^
 
-aurora_flow_test_sw_emu_loopback.xclbin: send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_$(TARGET)_loopback.cfg
-	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_$(TARGET) --config aurora_flow_test_$(TARGET)_loopback.cfg --output $@ recv_$(TARGET).xo send_$(TARGET).xo
+aurora_flow_test_sw_emu.xclbin: aurora_flow_sw_emu.xo send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_$(TARGET).cfg
+	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_$(TARGET) --config aurora_flow_test_$(TARGET).cfg --output $@ aurora_flow_sw_emu.xo recv_$(TARGET).xo send_$(TARGET).xo
 
-xclbin : aurora_flow_test_$(TARGET).xclbin
+aurora_flow_hw_emu_0.xo: $(RTL_EMU_SRC_0) ./tcl/pack_kernel_hw_emu.tcl
+	rm -rf aurora_flow_hw_emu_0_project
+	mkdir aurora_flow_hw_emu_0_project
+	cd aurora_flow_hw_emu_0_project && vivado -mode batch -source ../tcl/pack_kernel_hw_emu.tcl -tclargs $(PART) 0
 
-xclbin_emu: aurora_flow_test_$(TARGET)_loopback.xclbin
+aurora_flow_hw_emu_1.xo: $(RTL_EMU_SRC_1) ./tcl/pack_kernel_hw_emu.tcl
+	rm -rf aurora_flow_hw_emu_1_project
+	mkdir aurora_flow_hw_emu_1_project
+	cd aurora_flow_hw_emu_1_project && vivado -mode batch -source ../tcl/pack_kernel_hw_emu.tcl -tclargs $(PART) 1
+
+aurora_flow_test_hw_emu.xclbin: aurora_flow_hw_emu_0.xo aurora_flow_hw_emu_1.xo send_$(TARGET).xo recv_$(TARGET).xo aurora_flow_test_hw_emu.cfg ./rtl/aurora_flow_dpi.c
+	v++ $(LINKFLAGS) --temp_dir _x_aurora_flow_test_hw_emu --config aurora_flow_test_hw_emu.cfg \
+		--vivado.prop "fileset.sim_1.{xsim.compile.xsc.more_options}={$(CURDIR)/rtl/aurora_flow_dpi.c}" \
+		--output $@ aurora_flow_hw_emu_0.xo aurora_flow_hw_emu_1.xo recv_$(TARGET).xo send_$(TARGET).xo
+
+emconfig.json:
+	emconfigutil --platform $(PLATFORM)
+
+xclbin: aurora_flow_test_$(TARGET).xclbin emconfig.json
 
 # host build for example
 CXXFLAGS += -std=c++17 -Wall -g
@@ -185,14 +222,10 @@ CXXFLAGS += -fopenmp
 LDFLAGS := -L$(XILINX_XRT)/lib
 LDFLAGS += $(LDFLAGS) -lxrt_coreutil -luuid
 
-host_aurora_flow_test: ./host/host_aurora_flow_test.cpp ./host/Aurora.hpp ./host/Results.hpp ./host/Configuration.hpp ./host/Kernel.hpp
-	$(CXX) -o host_aurora_flow_test $< $(CXXFLAGS) $(LDFLAGS)
+host_aurora_flow_test: ./host/host_aurora_flow_test.cpp ./host/AuroraFlow.hpp ./host/Results.hpp ./host/Configuration.hpp ./host/Kernel.hpp
+	$(MPICXX) -o host_aurora_flow_test $< $(CXXFLAGS) $(LDFLAGS)
 
-host_aurora_flow_ring: ./host/host_aurora_flow_ring.cpp ./host/Aurora.hpp ./host/Results.hpp ./host/Configuration.hpp ./host/Kernel.hpp
-	$(MPICXX) -o host_aurora_flow_ring $< $(CXXFLAGS) $(LDFLAGS)
-
-
-host: host_aurora_flow_test host_aurora_flow_ring
+host: host_aurora_flow_test
 
 # verilog testbenches
 
