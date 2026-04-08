@@ -1,6 +1,6 @@
 //
 // Copyright 2021-2022 Xilinx, Inc.
-//           2023-2024 Gerrit Pape (papeg@mail.upb.de)
+//           2023-2026 Gerrit Pape (gerrit.pape@uni-paderborn.de)
 //           2023-2024 Paderborn Center for Parallel Computing
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
