@@ -67,11 +67,11 @@ if(NOT TARGET AuroraFlow::host)
     # since CMake does not ship a FindXRT module with the library.
 endif()
 
-# Forward user-settable Make variables into the library Makefile invocations
+# Forward AURORA_FLOW_<VAR> into <VAR>=value on the Makefile invocation.
 set(_AURORA_FLOW_MAKE_ARGS BUILD_DIR=${AURORA_FLOW_BUILD_DIR})
 foreach(var PLATFORM PART FIFO_WIDTH USE_FRAMING INS_LOSS_NYQ RX_EQ_MODE DRAIN_AXI_ON_RESET)
-    if(DEFINED ${var})
-        list(APPEND _AURORA_FLOW_MAKE_ARGS "${var}=${${var}}")
+    if(DEFINED AURORA_FLOW_${var})
+        list(APPEND _AURORA_FLOW_MAKE_ARGS "${var}=${AURORA_FLOW_${var}}")
     endif()
 endforeach()
 
