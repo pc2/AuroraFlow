@@ -76,7 +76,7 @@ build:sw_emu:
         rm -rf build_cmake_sw_emu
         mkdir build_cmake_sw_emu
         cd build_cmake_sw_emu
-        cmake ../test -DFIFO_WIDTH=$WIDTH
+        cmake ../test -DAURORA_FLOW_FIFO_WIDTH=$WIDTH
         cmake --build . --target xclbin_sw_emu
         cmake --build . --target emconfig
         cd ..
