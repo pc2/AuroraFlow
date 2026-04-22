@@ -73,16 +73,9 @@ void aurora_flow_sw_emu(
 #else
     signal(SIGPIPE, SIG_IGN);
 
-    const char *pipe_dir = getenv("AURORA_PIPE_DIR");
-    if (!pipe_dir) pipe_dir = ".";
-
-    const char *rank_str = getenv("OMPI_COMM_WORLD_RANK");
-    if (!rank_str) rank_str = getenv("PMIX_RANK");
-    int rank = rank_str ? atoi(rank_str) : 0;
-
     char tx_path[256], rx_path[256];
-    snprintf(tx_path, sizeof(tx_path), "%s/aurora_r%d_i%u_tx", pipe_dir, rank, pipe_id);
-    snprintf(rx_path, sizeof(rx_path), "%s/aurora_r%d_i%u_rx", pipe_dir, rank, pipe_id);
+    snprintf(tx_path, sizeof(tx_path), "link_i%u_tx", pipe_id);
+    snprintf(rx_path, sizeof(rx_path), "link_i%u_rx", pipe_id);
 
     int tx_fd = -1, rx_fd = -1;
     std::thread tx_opener([&tx_fd, &tx_path]() {
@@ -92,7 +85,8 @@ void aurora_flow_sw_emu(
     tx_opener.join();
 
     if (tx_fd < 0 || rx_fd < 0) {
-        fprintf(stderr, "aurora_flow_sw_emu[%u]: pipe open failed: %s\n",
+        fprintf(stderr,
+                "aurora_flow_sw_emu[%u]: pipe open failed: %s\n",
                 pipe_id, strerror(errno));
         if (tx_fd >= 0) close(tx_fd);
         if (rx_fd >= 0) close(rx_fd);

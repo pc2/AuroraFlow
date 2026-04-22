@@ -180,7 +180,7 @@ target_link_libraries(my_host PRIVATE AuroraFlow::host)
 - `AURORA_FLOW_DPI_SRC`: DPI-C source path (use with `--vivado.prop` for hw_emu)
 - `aurora_flow_build_hw()` / `aurora_flow_build_hw_emu()` / `aurora_flow_build_sw_emu()`: functions that add custom targets which delegate kernel packaging to the library Makefile.
 
-User-settable variables (`PLATFORM`, `PART`, `FIFO_WIDTH`, `USE_FRAMING`, `INS_LOSS_NYQ`, `RX_EQ_MODE`, `DRAIN_AXI_ON_RESET`) are automatically forwarded to the library Makefile invocation.
+User-settable variables are namespaced to avoid collisions. Set any of `AURORA_FLOW_PLATFORM`, `AURORA_FLOW_PART`, `AURORA_FLOW_FIFO_WIDTH`, `AURORA_FLOW_USE_FRAMING`, before `find_package(AuroraFlow)`.
 
 For a complete working example (host binary, HLS kernel compile, xclbin link for all three target modes), see [`test/CMakeLists.txt`](./test/CMakeLists.txt).
 
@@ -240,22 +240,19 @@ For all available functions take a look at [`include/AuroraFlow.hpp`](./include/
 ## Emulation modes
 
 Both emulation modes replace the QSFP physical link with Unix named pipes.
-The Aurora instance opens two pipes by name at startup and uses them as its TX/RX channel:
+The AuroraFlow instance opens two pipes by **relative name in the process's cwd**:
 
 ```
-$AURORA_PIPE_DIR/aurora_r{rank}_i{instance}_tx    (FIFO, the instance writes to it)
-$AURORA_PIPE_DIR/aurora_r{rank}_i{instance}_rx    (FIFO, the instance reads from it)
+./link_i{instance}_tx    (FIFO, the instance writes to it)
+./link_i{instance}_rx    (FIFO, the instance reads from it)
 ```
 
-- `rank`: MPI rank, taken from `OMPI_COMM_WORLD_RANK` or `PMIX_RANK` (defaults to 0)
 - `instance`: local Aurora core (0 or 1)
-- `AURORA_PIPE_DIR`: directory where the pipes live (defaults to `.`)
+- Each rank is expected to run in its own per-rank working directory that contains these FIFOs. See the rank-isolation note below.
 
-Both `aurora_flow_sw_emu` (sw_emu, `hls/aurora_flow_sw_emu.cpp`) and `aurora_flow_gt_stub` (hw_emu, `rtl/aurora_flow_dpi.c`) open the same path.
-The topology is expressed by how the `_rx` end of each instance is wired to the `_tx` end of another instance, typically with `mkfifo` + `ln -s` in a setup script.
-See `test/scripts/configure_*_emu.sh` for three working examples (loopback, pair, ring).
-The emulation requires that the runtimes for each emulated FPGAs are isolated.
-This is achieved with MPI in these examples.
+Both `aurora_flow_sw_emu` (sw_emu, `hls/aurora_flow_sw_emu.cpp`) and `aurora_flow_gt_stub` (hw_emu, `rtl/aurora_flow_dpi.c`) open the same relative paths. The topology (which rank's `_tx` feeds which rank's `_rx`) is expressed by the symlink structure the caller creates before launch. Generating that layout is out of scope for AuroraFlow; the companion tool [topomux](https://github.com/papeg/topomux) can emit the right `rank{R}/link_i{I}_{tx,rx}` per-rank-dir layout for arbitrary topologies.
+
+The emulation requires that the runtimes for each emulated FPGA are isolated, this is achieved with MPI in the examples.
 
 ### sw_emu
 
@@ -266,7 +263,7 @@ This is useful for a first and quick test, but does not guarantee full semantics
 
 Same RTL as hw but with the GT transceiver replaced by `rtl/aurora_flow_gt_stub.sv`.
 That module uses DPI-C functions (`rtl/aurora_flow_dpi.c`) to read/write the named pipes.
-This gives you cycle-accurate FIFO and NFC behavior, functional flow control (XOFF/XON triggering on programmable thresholds), and all configuration/status registers are readable from the host.
+This gives you cycle-accurate FIFO, functional flow control (XOFF/XON triggering on programmable thresholds), and all available configuration/status registers are readable from the host.
 The pipe-based link does not model the exact physical transceiver timing, but gets close.
 The NFC inflight window is approximated with a fixed 256-cycle delay, and both clock domains run at the same frequency.
 
@@ -285,33 +282,6 @@ v++ --link --target hw_emu ... \
 When running `hw_emu` under MPI, each rank needs its own working directory because xsim uses fixed socket and lock filenames that would collide between processes on the same host.
 The typical pattern is a small wrapper script invoked by `mpirun` that creates `.hw_emu_rank_$RANK`, symlinks the xclbin + `emconfig.json` + host binary into it, and `exec`s the host binary from there.
 See `test/scripts/hw_emu_rank_wrapper.sh` for a working example (15 lines).
-
-### Writing a topology configure script
-
-For creating the emulation topology, one FIFO per `_tx` pipe and one symlink per `_rx` pipe, pointing at a corresponding `_tx`, is needed.
-The loopback case (each instance talks to itself) is the smallest possible example:
-
-```bash
-#!/bin/bash
-PIPE_DIR="${AURORA_PIPE_DIR:?}"
-NUM_RANKS="${1:?usage: $0 <num_ranks>}"
-
-for ((r=0; r<NUM_RANKS; r++)); do
-    for i in 0 1; do
-        mkfifo "${PIPE_DIR}/aurora_r${r}_i${i}_tx"
-        ln -s  "${PIPE_DIR}/aurora_r${r}_i${i}_tx" \
-               "${PIPE_DIR}/aurora_r${r}_i${i}_rx"
-    done
-done
-```
-
-The three reference topologies in `test/scripts/` are:
-
-| Topology  | Wiring |
-| --------- | ------ |
-| Loopback  | `r{R}_i{I}_rx → r{R}_i{I}_tx` (each instance talks to itself) |
-| Pair      | `r{R}_i0_rx → r{R}_i1_tx`, `r{R}_i1_rx → r{R}_i0_tx` (i0 ↔ i1 within each rank) |
-| Ring      | `r{R}_i1 ↔ r{R+1}_i0` bidirectional around the ring |
 
 ## Noctua 2
 

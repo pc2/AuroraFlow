@@ -284,17 +284,17 @@ public:
     bool core_status_ok(size_t timeout_ms)
     {
         if (is_emulation) {
-            const char *pipe_dir = std::getenv("AURORA_PIPE_DIR");
-            if (!pipe_dir) pipe_dir = ".";
-
+            // Pipes are opened by relative name in cwd. rank_id is kept only
+            // for log prefixing (so multiple ranks' messages are separable),
+            // not for path construction.
             bool ok = true;
             for (const char *suffix : {"tx", "rx"}) {
                 char pipe_path[256];
-                snprintf(pipe_path, sizeof(pipe_path), "%s/aurora_r%d_i%u_%s", pipe_dir, rank_id, instance_id, suffix);
+                snprintf(pipe_path, sizeof(pipe_path), "link_i%u_%s", instance_id, suffix);
                 struct stat lst, st;
                 if (lstat(pipe_path, &lst) != 0) {
                     std::cerr << "Aurora[r" << rank_id << "_i" << instance_id << "]: " << pipe_path
-                              << " not found: " << strerror(errno) << std::endl;
+                              << " not found in cwd: " << strerror(errno) << std::endl;
                     ok = false;
                 } else if (S_ISLNK(lst.st_mode)) {
                     if (stat(pipe_path, &st) == 0 && S_ISFIFO(st.st_mode)) {
