@@ -23,9 +23,16 @@ set part      [lindex $argv 0]
 set instance  [lindex $argv 1]
 set src_dir   [lindex $argv 2]
 set build_dir [lindex $argv 3]
+set ip_root   ./aurora_flow_ip_${instance}
+set ip_src    ${ip_root}/src
 
 # create ip project with part name in command line argvs
 create_project aurora_flow_${instance} ./aurora_flow_${instance} -part $part
+
+# stage generated sources inside the IP root so package_project keeps relative
+# paths for the packaged include file.
+file mkdir ${ip_src}
+file copy -force ${build_dir}/rtl/aurora_flow_define.v ${ip_src}/aurora_flow_define.v
 
 # add design sources into project
 add_files -norecurse -fileset sources_1 \
@@ -35,7 +42,6 @@ add_files -norecurse -fileset sources_1 \
               ${src_dir}/rtl/aurora_flow_io.v \
               ${src_dir}/rtl/aurora_flow_nfc.v \
               ${src_dir}/rtl/aurora_flow_reset.v \
-              ${build_dir}/rtl/aurora_flow_define.v \
               ${src_dir}/rtl/aurora_flow_configuration.v \
               ${src_dir}/rtl/aurora_flow_monitor.v \
               ${build_dir}/ip_creation/aurora_64b66b_0/aurora_64b66b_0.xci \
@@ -50,8 +56,8 @@ add_files -norecurse -fileset constrs_1 \
               ${src_dir}/xdc/aurora_64b66b_${instance}.xdc \
        ]
 
-# make `include "aurora_flow_define.v" resolve to the generated file in build_dir
-set_property include_dirs [list ${build_dir}/rtl] [get_filesets sources_1]
+# make `include "aurora_flow_define.v" resolve to the staged file in the IP root
+set_property include_dirs [list ${ip_src}] [get_filesets sources_1]
 
 update_compile_order -fileset sources_1
 
