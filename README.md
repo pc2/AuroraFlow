@@ -240,17 +240,22 @@ For all available functions take a look at [`include/AuroraFlow.hpp`](./include/
 ## Emulation modes
 
 Both emulation modes replace the QSFP physical link with Unix named pipes.
-The AuroraFlow instance opens two pipes by **relative name in the process's cwd**:
+The AuroraFlow instance opens two pipes from `AURORA_PIPE_DIR` if it is set,
+otherwise from the process's cwd:
 
 ```
-./link_i{instance}_tx    (FIFO, the instance writes to it)
-./link_i{instance}_rx    (FIFO, the instance reads from it)
+${AURORA_PIPE_DIR}/rank{rank}/link_i{instance}_tx    (FIFO, the instance writes to it)
+${AURORA_PIPE_DIR}/rank{rank}/link_i{instance}_rx    (FIFO, the instance reads from it)
+./link_i{instance}_tx                                 (fallback when AURORA_PIPE_DIR is unset)
+./link_i{instance}_rx
 ```
 
 - `instance`: local Aurora core (0 or 1)
-- Each rank is expected to run in its own per-rank working directory that contains these FIFOs. See the rank-isolation note below.
+- `rank`: MPI rank id (`OMPI_COMM_WORLD_RANK` / `PMIX_RANK`)
+- If `AURORA_PIPE_DIR` is set, each rank resolves its pipes below `rank{rank}/`.
+- If `AURORA_PIPE_DIR` is unset, each rank is expected to run inside its own per-rank working directory that already contains these FIFOs.
 
-Both `aurora_flow_sw_emu` (sw_emu, `hls/aurora_flow_sw_emu.cpp`) and `aurora_flow_gt_stub` (hw_emu, `rtl/aurora_flow_dpi.c`) open the same relative paths. The topology (which rank's `_tx` feeds which rank's `_rx`) is expressed by the symlink structure the caller creates before launch. Generating that layout is out of scope for AuroraFlow; the companion tool [topomux](https://github.com/papeg/topomux) can emit the right `rank{R}/link_i{I}_{tx,rx}` per-rank-dir layout for arbitrary topologies.
+Both `aurora_flow_sw_emu` (sw_emu, `hls/aurora_flow_sw_emu.cpp`) and `aurora_flow_gt_stub` (hw_emu, `rtl/aurora_flow_dpi.c`) open the same paths. The topology (which rank's `_tx` feeds which rank's `_rx`) is expressed by the symlink structure the caller creates before launch. Generating that layout is out of scope for AuroraFlow; the companion tool [topomux](https://github.com/papeg/topomux) can emit the right `rank{R}/link_i{I}_{tx,rx}` per-rank-dir layout for arbitrary topologies.
 
 The emulation requires that the runtimes for each emulated FPGA are isolated, this is achieved with MPI in the examples.
 

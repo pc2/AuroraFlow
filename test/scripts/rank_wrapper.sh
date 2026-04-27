@@ -17,5 +17,6 @@ ln -sf "${BASE_DIR}/emconfig.json"                       "${RANK_DIR}/"
 ln -sf "${BASE_DIR}/host_aurora_flow_test"               "${RANK_DIR}/"
 [ -e "${BASE_DIR}/xrt.ini" ] && ln -sf "${BASE_DIR}/xrt.ini" "${RANK_DIR}/"
 
+export AURORA_PIPE_DIR="${PIPE_DIR}"
 cd "$RANK_DIR"
 exec ./host_aurora_flow_test "$@"
