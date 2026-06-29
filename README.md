@@ -79,6 +79,7 @@ All parameters are also forwarded automatically when the library is built throug
 | `TX_FIFO_SIZE`        | `8192`  | TX FIFO size in bytes |
 | `PART`                | `xcu280-fsvh2892-2L-e` | Target device part |
 | `PLATFORM`            | `xilinx_u280_gen3x16_xdma_1_202211_1` | Target platform |
+| `VERSION`             | `12.0`  | Aurora IP Core Version |
 
 ### FIFO configuration
 
