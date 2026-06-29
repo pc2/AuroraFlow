@@ -30,6 +30,9 @@ BUILD_DIR       ?= $(AURORA_FLOW_DIR)/build
 
 all: aurora_hw aurora_hw_emu aurora_sw_emu
 
+# Aurora IP Core Version
+AURORA_VERSION ?= 12.0
+
 # Target board
 PART     := xcu280-fsvh2892-2L-e
 PLATFORM ?= xilinx_u280_gen3x16_xdma_1_202211_1
@@ -79,7 +82,7 @@ $(BUILD_DIR):
 $(BUILD_DIR)/ip_creation/aurora_64b66b_0/aurora_64b66b_0.xci: $(AURORA_FLOW_DIR)/tcl/create_aurora_ip.tcl | $(BUILD_DIR)
 	mkdir -p $(BUILD_DIR)/ip_creation
 	rm -rf $(BUILD_DIR)/ip_creation/aurora_64b66b_0
-	cd $(BUILD_DIR) && vivado -mode batch -source $< -tclargs $(PART) 0 $(INS_LOSS_NYQ) $(RX_EQ_MODE) $(USE_FRAMING)
+	cd $(BUILD_DIR) && vivado -mode batch -source $< -tclargs $(PART) 0 $(INS_LOSS_NYQ) $(RX_EQ_MODE) $(USE_FRAMING) $(AURORA_VERSION)
 
 $(BUILD_DIR)/ip_creation/axis_data_fifo_rx/axis_data_fifo_rx.xci: $(AURORA_FLOW_DIR)/tcl/create_fifo_ip.tcl | $(BUILD_DIR)
 	mkdir -p $(BUILD_DIR)/ip_creation

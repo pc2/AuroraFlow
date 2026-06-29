@@ -73,6 +73,9 @@ endif
 ifdef DRAIN_AXI_ON_RESET
   AURORA_FLOW_MAKE_ARGS += DRAIN_AXI_ON_RESET=$(DRAIN_AXI_ON_RESET)
 endif
+ifdef AURORA_VERSION
+  AURORA_FLOW_MAKE_ARGS += AURORA_VERSION=$(AURORA_VERSION)
+endif
 
 .PHONY: aurora_flow_hw aurora_flow_hw_emu aurora_flow_sw_emu
 

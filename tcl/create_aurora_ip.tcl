@@ -23,6 +23,8 @@ set rx_eq_mode [lindex $argv 3]
 
 set use_framing [lindex $argv 4]
 
+set version [lindex $argv 5]
+
 if {$use_framing == "1"} {
     set interface_mode "Framing"
     set crc_mode "true"
@@ -38,7 +40,7 @@ if {$use_framing == "1"} {
 create_ip -name aurora_64b66b \
           -vendor xilinx.com \
           -library ip \
-          -version 12.0 \
+          -version $version \
           -module_name aurora_64b66b_$instance \
           -dir ./ip_creation
 
