@@ -1,5 +1,5 @@
 #!/bin/bash
-# Invoked by mpirun — creates a unique working directory per rank
+# Invoked by mpirun, creates a unique working directory per rank
 # to isolate XRT hw_emu xsim instances
 
 RANK=${OMPI_COMM_WORLD_RANK:-${PMIX_RANK:-${PMI_RANK:-${SLURM_LOCALID:-0}}}}

@@ -37,12 +37,16 @@ static int get_rank() {
 void aurora_dpi_open_all() {
     char path[256];
     const char *dir = getenv("AURORA_PIPE_DIR");
-    if (!dir) dir = ".";
     int rank = get_rank();
 
     // Phase 1: open all RX fds (O_RDONLY|O_NONBLOCK succeeds immediately)
     for (int i = 0; i < MAX_INSTANCES; i++) {
-        snprintf(path, sizeof(path), "%s/aurora_r%d_i%d_rx", dir, rank, i);
+        if (dir) {
+            snprintf(path, sizeof(path), "%s/rank%d/link_i%d_rx",
+                     dir, rank, i);
+        } else {
+            snprintf(path, sizeof(path), "./link_i%d_rx", i);
+        }
         rx_fds[i] = open(path, O_RDONLY | O_NONBLOCK);
         printf("aurora_dpi[r%d_i%d]: open RX %s = %d %s\n", rank, i, path,
                rx_fds[i], rx_fds[i] < 0 ? strerror(errno) : "ok");
@@ -51,7 +55,12 @@ void aurora_dpi_open_all() {
 
     // Phase 2: open all TX fds (readers now exist from phase 1)
     for (int i = 0; i < MAX_INSTANCES; i++) {
-        snprintf(path, sizeof(path), "%s/aurora_r%d_i%d_tx", dir, rank, i);
+        if (dir) {
+            snprintf(path, sizeof(path), "%s/rank%d/link_i%d_tx",
+                     dir, rank, i);
+        } else {
+            snprintf(path, sizeof(path), "./link_i%d_tx", i);
+        }
         int retries = 0;
         tx_fds[i] = open(path, O_WRONLY | O_NONBLOCK);
         while (tx_fds[i] < 0 && errno == ENXIO && retries < 10000) {

@@ -24,8 +24,13 @@ set part      [lindex $argv 0]
 set instance  [lindex $argv 1]
 set src_dir   [lindex $argv 2]
 set build_dir [lindex $argv 3]
+set ip_root   ./aurora_flow_ip_${instance}
+set ip_src    ${ip_root}/src
 
 create_project aurora_flow_${instance} ./aurora_flow_${instance} -part $part
+
+file mkdir ${ip_src}
+file copy -force ${build_dir}/rtl/hw_emu/aurora_flow_define.v ${ip_src}/aurora_flow_define.v
 
 add_files -norecurse -fileset sources_1 \
        [list                                          \
@@ -33,7 +38,6 @@ add_files -norecurse -fileset sources_1 \
               ${build_dir}/rtl/hw_emu/aurora_flow_${instance}.v \
               ${src_dir}/rtl/aurora_flow_io.v \
               ${src_dir}/rtl/aurora_flow_nfc.v \
-              ${build_dir}/rtl/hw_emu/aurora_flow_define.v \
               ${src_dir}/rtl/aurora_flow_configuration.v \
               ${src_dir}/rtl/aurora_flow_monitor.v \
               ${src_dir}/rtl/aurora_flow_gt_stub.sv \
@@ -41,10 +45,10 @@ add_files -norecurse -fileset sources_1 \
               ${build_dir}/ip_creation/axis_data_fifo_tx/axis_data_fifo_tx.xci \
               ${build_dir}/ip_creation/axis_dwidth_converter_rx/axis_dwidth_converter_rx.xci \
               ${build_dir}/ip_creation/axis_dwidth_converter_tx/axis_dwidth_converter_tx.xci \
-       ]
+]
 
 # make `include "aurora_flow_define.v" resolve to the hw_emu variant
-set_property include_dirs [list ${build_dir}/rtl/hw_emu] [get_filesets sources_1]
+set_property include_dirs [list ${ip_src}] [get_filesets sources_1]
 
 update_compile_order -fileset sources_1
 

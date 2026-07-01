@@ -32,6 +32,9 @@ list(APPEND CMAKE_MODULE_PATH "${AURORA_FLOW_DIR}/cmake")
 # so a single `rm -rf <build_dir>` cleans everything.
 set(AURORA_FLOW_BUILD_DIR "${CMAKE_BINARY_DIR}" CACHE PATH "AuroraFlow kernel build directory" FORCE)
 
+set(AURORA_FLOW_PLATFORM   "xilinx_u280_gen3x16_xdma_1_202211_1" CACHE STRING "v++ platform")
+set(AURORA_FLOW_FIFO_WIDTH "64" CACHE STRING "AuroraFlow FIFO width (32 or 64)")
+
 find_package(AuroraFlow REQUIRED)
 
 # ---------------------------------------------------------------------------
@@ -88,15 +91,12 @@ aurora_flow_build_sw_emu()
 find_program(VPP_EXECUTABLE v++ REQUIRED)
 find_program(EMCONFIGUTIL_EXECUTABLE emconfigutil)
 
-set(PLATFORM   "xilinx_u280_gen3x16_xdma_1_202211_1" CACHE STRING "v++ platform")
-set(FIFO_WIDTH "64" CACHE STRING "AuroraFlow FIFO width (32 or 64)")
-
 set(VPP_COMMON_FLAGS
-    --platform ${PLATFORM}
+    --platform ${AURORA_FLOW_PLATFORM}
     --save-temps
     --debug
 )
-set(VPP_HLS_FLAGS ${VPP_COMMON_FLAGS} -DDATA_WIDTH_BYTES=${FIFO_WIDTH})
+set(VPP_HLS_FLAGS ${VPP_COMMON_FLAGS} -DDATA_WIDTH_BYTES=${AURORA_FLOW_FIFO_WIDTH})
 set(VPP_LINK_FLAGS --link --optimize 3 ${VPP_COMMON_FLAGS})
 
 # ---------------------------------------------------------------------------
@@ -193,7 +193,7 @@ if(EMCONFIGUTIL_EXECUTABLE)
     set(EMCONFIG_JSON "${CMAKE_BINARY_DIR}/emconfig.json")
     add_custom_command(
         OUTPUT ${EMCONFIG_JSON}
-        COMMAND ${EMCONFIGUTIL_EXECUTABLE} --platform ${PLATFORM} --od ${CMAKE_BINARY_DIR}
+        COMMAND ${EMCONFIGUTIL_EXECUTABLE} --platform ${AURORA_FLOW_PLATFORM} --od ${CMAKE_BINARY_DIR}
         COMMENT "Generating emconfig.json"
         VERBATIM
     )
