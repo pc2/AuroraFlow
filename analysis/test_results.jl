@@ -1,16 +1,41 @@
 using Test
 include("results.jl")
 
-function write_benchmark(path)
+function write_benchmark(path; framing_mismatches=nothing, append=false,
+                         frame_errors=0, byte_errors=0, failed_transmissions=0)
     rows = [
         Any["node", "1", "commit", "2.16", "device", instance, 0, 0, 1, 4,
             1024, 10, 0, elapsed, 0, 0, zeros(Int, 22)...]
         for (instance, elapsed) in [(0, 1e-4), (1, 3e-4)]
     ]
-    open(path, "w") do io
+    open(path, append ? "a" : "w") do io
         for row in rows
+            row[17] = failed_transmissions
+            row[23] = byte_errors
+            row[38] = frame_errors
+            isnothing(framing_mismatches) || push!(row, framing_mismatches)
             println(io, join(row, ','))
         end
+    end
+end
+
+@testset "Benchmark analysis treats receiver framing mismatches as diagnostics" begin
+    mktempdir() do directory
+        path = joinpath(directory, "benchmark.csv")
+        matrix = Dict("WIDTH" => "64", "AXI_CLOCK_HZ" => "300000000",
+                      "XRT" => "2.16", "FRAME_SIZE" => "4")
+        write_benchmark(path; framing_mismatches=0)
+        @test benchmark_points(path, matrix).latency[1] ≈ 2e-5
+        write_benchmark(path; append=true)
+        @test benchmark_points(path, matrix).instances == [4]
+        write_benchmark(path; framing_mismatches=255)
+        @test benchmark_points(path, matrix).latency[1] ≈ 2e-5
+        write_benchmark(path; framing_mismatches=255, frame_errors=1)
+        @test_throws ErrorException benchmark_points(path, matrix)
+        write_benchmark(path; framing_mismatches=255, byte_errors=1)
+        @test_throws ErrorException benchmark_points(path, matrix)
+        write_benchmark(path; framing_mismatches=255, failed_transmissions=1)
+        @test_throws ErrorException benchmark_points(path, matrix)
     end
 end
 

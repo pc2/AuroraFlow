@@ -31,6 +31,7 @@ public:
     std::vector<std::vector<uint32_t>> channel_down_count;
     std::vector<std::vector<uint32_t>> frames_received;
     std::vector<std::vector<uint32_t>> frames_with_errors;
+    std::vector<std::vector<uint32_t>> framing_mismatches;
 
     ExecutionMode execution_mode;
 
@@ -51,6 +52,7 @@ public:
         errors.resize(config.num_instances);
         frames_received.resize(config.num_instances);
         frames_with_errors.resize(config.num_instances);
+        framing_mismatches.resize(config.num_instances);
         tx_count.resize(config.num_instances);
         rx_count.resize(config.num_instances);
         
@@ -82,6 +84,7 @@ public:
             errors[i].resize(config.repetitions);
             frames_received[i].resize(config.repetitions);
             frames_with_errors[i].resize(config.repetitions);
+            framing_mismatches[i].resize(config.repetitions);
             tx_count[i].resize(config.repetitions);
             rx_count[i].resize(config.repetitions);
             
@@ -180,6 +183,15 @@ public:
             for (uint32_t r = 0; r < config.repetitions; r++) {
                 count += frames_with_errors[i][r];
             }
+        }
+        return count;
+    }
+
+    uint32_t total_framing_mismatches()
+    {
+        uint32_t count = 0;
+        for (const auto &instance : framing_mismatches) {
+            for (uint32_t mismatches : instance) count += mismatches;
         }
         return count;
     }
@@ -315,7 +327,7 @@ public:
                   << std::setw(12) << "Failed"
                   << std::setw(12) << "Bytes";
         if (has_counters()) {
-            std::cout << std::setw(12) << "Frames"
+            std::cout << std::setw(12) << "CRC frames"
                       << std::setw(12) << "FIFO RX"
                       << std::setw(12) << "NFC";
         }
@@ -492,7 +504,8 @@ public:
                    << soft_err_count[i][r] << ","
                    << channel_down_count[i][r] << ","
                    << frames_received[i][r] << ","
-                   << frames_with_errors[i][r]
+                   << frames_with_errors[i][r] << ","
+                   << framing_mismatches[i][r]
                    << std::endl;
             }
         }

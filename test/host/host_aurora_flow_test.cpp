@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
                     results.transmission_times[i][r] = elapsed;
                     results.update_counter(i, r);
                     if (config.frame_sizes[r] != 0)
-                        results.frames_with_errors[i][r] += recv_kernels[i].read_framing_errors();
+                        results.framing_mismatches[i][r] = recv_kernels[i].read_framing_errors();
                 }
             } catch (const std::exception &error) {
                 std::cerr << log_prefix << "Concurrent transfer failed: " << error.what() << std::endl;
@@ -273,11 +273,7 @@ int main(int argc, char *argv[])
                 recv.write_back();
 
                 if (config.frame_sizes[r] != 0 && results.failed_transmissions[i][r] == 0) {
-                    results.frames_with_errors[i][r] = recv.read_framing_errors();
-                    if (results.frames_with_errors[i][r]) {
-                        std::cout << log_prefix << results.frames_with_errors[i][r]
-                                  << " AXI-Stream framing errors" << std::endl;
-                    }
+                    results.framing_mismatches[i_recv][r] = recv.read_framing_errors();
                 }
 
                 results.errors[i][r] = recv.compare_data(data[i].data(), r);
@@ -293,11 +289,6 @@ int main(int argc, char *argv[])
             } catch (...) {
                 std::cout << log_prefix << "caught non-std::logic_error " << std::endl;
                 results.failed_transmissions[i][r] = 5;
-            }
-            if (recv_aurora.has_framing()) {
-                if (results.frames_with_errors[i][r]) {
-                    std::cout << log_prefix << results.frames_with_errors[i][r] << " frame errors" << std::endl;
-                }
             }
         }
 
@@ -321,7 +312,7 @@ int main(int argc, char *argv[])
 
             uint32_t total_frame_errors = results.total_frame_errors();
             if (total_frame_errors) {
-                std::cout << log_prefix << total_frame_errors << " frames with errors in total" << std::endl;
+                std::cout << log_prefix << total_frame_errors << " frames with CRC errors in total" << std::endl;
             }
 
         }

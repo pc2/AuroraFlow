@@ -273,6 +273,8 @@ check:host:
       fi
     - mkdir -p "build-host-artifacts/$BUILD_SYS/xrt$XRT"
     - cp build-host/host_aurora_flow_test "build-host-artifacts/$BUILD_SYS/xrt$XRT/"
+    - g++ -std=c++17 -Wall -Wextra -Werror test/host/tests/results_test.cpp -o build-host/results_test
+    - build-host/results_test build-host/results-test-output
   artifacts:
     paths:
       - "build-host-artifacts/$BUILD_SYS/xrt$XRT/host_aurora_flow_test"

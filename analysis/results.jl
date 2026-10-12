@@ -10,7 +10,7 @@ const CSV_COLUMNS = [
     :rx_overflow, :tx_almost_full, :nfc_full, :nfc_empty, :nfc_latency,
     :byte_errors, :gt0, :gt1, :gt2, :gt3, :line0, :line1, :line2, :line3,
     :pll, :mmcm, :hard_errors, :soft_errors, :channel_down, :frames,
-    :frame_errors,
+    :frame_errors, :framing_mismatches,
 ]
 
 read_json(path) = JSON3.read(read(path, String), Dict{String, Any})
@@ -35,8 +35,14 @@ function result_directory(root, result)
 end
 
 function benchmark_points(path, matrix)
-    data = CSV.read(path, DataFrame, header=CSV_COLUMNS)
-    ncol(data) == length(CSV_COLUMNS) || error("Unexpected benchmark CSV columns.")
+    data = CSV.read(path, DataFrame, header=false)
+    ncol(data) in (length(CSV_COLUMNS) - 1, length(CSV_COLUMNS)) || error("Unexpected benchmark CSV columns.")
+    rename!(data, CSV_COLUMNS[1:ncol(data)])
+    if ncol(data) == length(CSV_COLUMNS) - 1
+        data.framing_mismatches = zeros(Int, nrow(data))
+    else
+        data.framing_mismatches = coalesce.(data.framing_mismatches, 0)
+    end
     nrow(data) > 0 || error("Empty benchmark CSV.")
     all(data.iterations .> 0) && all(isfinite.(data.elapsed_seconds) .& (data.elapsed_seconds .> 0)) || error("Invalid benchmark timing.")
     all(data.mode .== 1) && all(data.nfc_test .== 0) || error("Expected the pair benchmark without deliberate NFC pressure.")
