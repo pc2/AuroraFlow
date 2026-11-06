@@ -242,9 +242,8 @@ check:rtl:
     - source env.sh
   script:
     - make "run_${TB}_tb"
-    # xsim can return zero after an internal Tcl/launch error, so the log is
-    # part of the pass criterion rather than relying on the process status.
-    - '! grep -q ''^ERROR:'' xsim.log'
+    # xsim returns zero after an internal Tcl or launch error and after $fatal, so the log is part of the pass criterion.
+    - '! grep -qE ''^(ERROR|Fatal):'' xsim.log'
   artifacts:
     paths:
       - "${TB}_tb.wdb"
