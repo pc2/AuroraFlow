@@ -137,10 +137,9 @@ module aurora_flow_gt_stub #(
         end
     end
 
-    // TX: accept an AXI beat into a one-entry buffer, then retry the
-    // nonblocking pipe write until it succeeds.  TREADY describes buffer
-    // availability; it must not report the result of a write attempted at the
-    // same clock edge, because the AXI source samples the old TREADY value.
+    // TX: every accepted beat goes into the pipe at once, so the stub sends one beat per cycle like it receives.
+    // A beat the pipe refuses waits in a one entry buffer and blocks the stream until a retry succeeds.
+    // TREADY follows the registered buffer state and never the result of a write at the same clock edge, because the AXI source samples the old TREADY value.
     bit [255:0] tx_data;
     bit [31:0] tx_keep;
     bit tx_last;
@@ -164,7 +163,7 @@ module aurora_flow_gt_stub #(
             tx_keep = 32'hffffffff;
             tx_last = 1'b0;
 `endif
-            tx_pending <= 1;
+            tx_pending <= !aurora_dpi_write(INSTANCE, tx_data, tx_keep, tx_last);
         end
     end
 
